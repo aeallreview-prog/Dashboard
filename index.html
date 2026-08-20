@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>seek n tique — แดชบอร์ดยอดขาย</title>
+<link rel="icon" href="logo.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="shell">
+  <div class="workspace">
+
+    <div class="hero">
+      <div class="brand">
+        <img src="logo.png" alt="seek n tique" class="brand-logo">
+        <div>
+          <p class="eyebrow">Live sales dashboard</p>
+          <h1>สรุปยอดขาย</h1>
+          <p class="subtitle">ข้อมูลสดจาก Google Sheet — อัปเดตอัตโนมัติทุก 30 วินาที</p>
+        </div>
+      </div>
+      <div class="hero-right">
+        <div class="hero-actions">
+          <button id="refreshBtn"><span>รีเฟรชตอนนี้</span></button>
+          <button class="ghost" id="settingsBtn">ตั้งค่า</button>
+        </div>
+        <div class="status" id="statusLine"><i></i><span id="statusText">กำลังโหลด...</span></div>
+      </div>
+    </div>
+
+    <div id="errorArea"></div>
+
+    <div class="summary" id="summaryArea">
+      <div class="metric">
+        <p>รายรับ</p>
+        <strong id="revenueVal">–</strong>
+        <small>อ้างอิงจากช่อง U2</small>
+      </div>
+      <div class="metric">
+        <p>รายจ่าย</p>
+        <strong id="expenseVal">–</strong>
+        <small>อ้างอิงจากช่อง T2</small>
+      </div>
+      <div class="metric">
+        <p>กำไร</p>
+        <strong id="profitVal">–</strong>
+        <small>อ้างอิงจากช่อง V2</small>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>สถานะสินค้า <span id="statusColTag"></span></h2>
+          <p>จำนวนสินค้าทั้งหมดแยกตามสถานะ</p>
+        </div>
+        <p id="totalItemsTag"></p>
+      </div>
+      <div class="status-grid" id="statusGrid">
+        <p class="empty">กำลังโหลดข้อมูลสถานะ...</p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>ภาพรวมสถานะ</h2>
+          <p>สัดส่วนสินค้าทั้งหมดตามสถานะ</p>
+        </div>
+      </div>
+      <div class="donut-wrap" id="donutWrap">
+        <div class="donut" id="donutChart"><div class="donut-center"><strong id="donutTotal">0</strong><span>รายการ</span></div></div>
+        <div class="legend" id="legendArea"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>ค้นหาสินค้า</h2>
+          <p>ค้นหาด้วยเลข No. (คอลัมน์ A) — ค้นได้สูงสุด 5 รายการพร้อมกัน คั่นด้วยเครื่องหมาย ,</p>
+        </div>
+      </div>
+      <div class="search-wrap">
+        <input id="searchInput" type="text" placeholder="เช่น 1,8,120 (สูงสุด 5 รายการ) แล้วกด Enter" inputmode="numeric">
+        <button id="searchBtn">ค้นหา</button>
+      </div>
+      <div id="searchResult"></div>
+    </div>
+
+    <div class="footer">
+      <p class="note" id="lastUpdated">ยังไม่เคยอัปเดต</p>
+      <p class="note">seek n tique</p>
+    </div>
+
+  </div>
+</div>
+
+<div class="settings-backdrop" id="settingsBackdrop">
+  <div class="settings-panel">
+    <h3>ตั้งค่าการเชื่อมต่อ</h3>
+    <p>ปรับให้ตรงกับโครงสร้างชีตของคุณ (ตั้งค่าครั้งเดียว บันทึกไว้ในเครื่องนี้)</p>
+
+    <div class="field">
+      <label>Google Sheet ID</label>
+      <input id="cfgSheetId" type="text" placeholder="เช่น 1uWbyx7ojEQ...">
+      <small>ก็อปจาก URL ส่วนระหว่าง /d/ และ /edit</small>
+    </div>
+
+    <div class="field">
+      <label>ชื่อแท็บ (ถ้ามีหลายแท็บ ปล่อยว่างถ้าใช้แท็บแรก)</label>
+      <input id="cfgSheetName" type="text" placeholder="เช่น ข้อมูลล่าสุด">
+    </div>
+
+    <div class="field">
+      <label>คอลัมน์สถานะสินค้า</label>
+      <select id="cfgStatusCol">
+        <option value="auto">ตรวจจับอัตโนมัติ</option>
+      </select>
+      <small>ถ้าตรวจจับผิด เลือกคอลัมน์ที่ถูกต้องเองได้</small>
+    </div>
+
+    <div class="field">
+      <label>ความถี่รีเฟรช (วินาที)</label>
+      <input id="cfgInterval" type="number" min="5" value="30">
+    </div>
+
+    <div class="settings-actions">
+      <button class="ghost" id="settingsCancel">ยกเลิก</button>
+      <button id="settingsSave">บันทึก & โหลดใหม่</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
