@@ -147,11 +147,12 @@ button:disabled { opacity: .55; cursor: wait; }
 }
 .search-field p { margin: 0 0 4px; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .03em; }
 .search-field strong { display: block; color: var(--ink); font: 700 16px 'DM Sans', sans-serif; word-break: break-word; margin: auto 0; }
-.search-field.image-field { flex: 0 0 110px; gap: 6px; }
+.search-field.image-field { flex: 0 0 110px; gap: 6px; align-items: center; text-align: center; }
 .search-field.image-field img { width: 100%; height: 90px; object-fit: cover; border-radius: 10px; background: var(--paper); }
 .search-field.image-field strong { margin: auto 0; font: 700 16px 'DM Sans', sans-serif; }
-.search-field.detail-field { flex: 0 0 320px; padding: 12px 18px; }
-.search-field.detail-field strong { font: 500 13px 'DM Sans', sans-serif; line-height: 1.5; white-space: pre-wrap; margin: 0; }
+.search-field.detail-field { flex: 0 0 320px; padding: 12px 18px; align-items: flex-start; text-align: left; }
+.search-field.detail-field p { align-self: flex-start; }
+.search-field.detail-field strong { font: 500 13px 'DM Sans', sans-serif; line-height: 1.5; white-space: pre-wrap; margin: 0; text-align: left; }
 .search-field.price-field { background: #1f9d63; }
 .search-field.price-field p { color: rgba(255,255,255,.85); }
 .search-field.price-field strong { color: #fff; }
@@ -177,6 +178,20 @@ button:disabled { opacity: .55; cursor: wait; }
 .field small { display: block; margin-top: 5px; color: var(--muted); font-size: 11px; }
 .settings-actions { display: flex; gap: 10px; margin-top: 18px; }
 .settings-actions button { flex: 1; justify-content: center; }
+
+/* Login gate */
+.login-backdrop {
+  position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px;
+  background: radial-gradient(circle at 85% 15%, rgba(255,255,255,.12), transparent 30%), linear-gradient(135deg, var(--blue), var(--blue-deep));
+}
+.login-card { width: min(360px, 100%); background: var(--card); border-radius: 22px; padding: 34px 30px; text-align: center; box-shadow: 0 30px 70px rgba(0,0,0,.35); }
+.login-logo { width: 72px; height: 72px; object-fit: contain; border-radius: 16px; background: var(--blue); padding: 6px; margin: 0 auto 16px; display: block; }
+.login-card h2 { margin: 0 0 6px; font: 700 22px 'DM Sans', sans-serif; letter-spacing: -.03em; }
+.login-card > p { margin: 0 0 20px; color: var(--muted); font-size: 12px; }
+.login-card .field { text-align: left; margin-bottom: 14px; }
+.login-error { min-height: 16px; margin: 0 0 12px; color: #d64545; font-size: 12px; }
+.login-card button { width: 100%; justify-content: center; }
+.shell.hidden { display: none; }
 
 @media (max-width: 720px) {
   .shell { width: calc(100% - 24px); margin: 12px auto; border-radius: 18px; }

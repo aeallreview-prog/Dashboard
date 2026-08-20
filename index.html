@@ -9,7 +9,25 @@
 </head>
 <body>
 
-<div class="shell">
+<div class="login-backdrop" id="loginBackdrop">
+  <div class="login-card">
+    <img src="logo.png" alt="seek n tique" class="login-logo">
+    <h2>เข้าสู่ระบบ</h2>
+    <p>กรอก ID และ Password เพื่อเข้าใช้งานแดชบอร์ด</p>
+    <div class="field">
+      <label>ID</label>
+      <input id="loginId" type="text" autocomplete="username">
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input id="loginPass" type="password" autocomplete="current-password">
+    </div>
+    <p class="login-error" id="loginError"></p>
+    <button id="loginBtn">เข้าสู่ระบบ</button>
+  </div>
+</div>
+
+<div class="shell hidden">
   <div class="workspace">
 
     <div class="hero">
@@ -18,12 +36,12 @@
         <div>
           <p class="eyebrow">Live sales dashboard</p>
           <h1>สรุปยอดขาย</h1>
-          <p class="subtitle">ข้อมูลสดจาก Google Sheet</p>
+          <p class="subtitle">ข้อมูลสดจาก Google Sheet — อัปเดตอัตโนมัติทุก 30 วินาที</p>
         </div>
       </div>
       <div class="hero-right">
         <div class="hero-actions">
-          <button id="refreshBtn"><span>รีเฟรช</span></button>
+          <button id="refreshBtn"><span>รีเฟรชตอนนี้</span></button>
           <button class="ghost" id="settingsBtn">ตั้งค่า</button>
         </div>
         <div class="status" id="statusLine"><i></i><span id="statusText">กำลังโหลด...</span></div>
@@ -80,11 +98,11 @@
       <div class="panel-head">
         <div>
           <h2>ค้นหาสินค้า</h2>
-          <p>ค้นหาด้วยเลข No. ค้นได้สูงสุด 5 รายการพร้อมกัน คั่นด้วยเครื่องหมาย ,</p>
+          <p>ค้นหาด้วยเลข No. (คอลัมน์ A) — ค้นได้สูงสุด 5 รายการพร้อมกัน คั่นด้วยเครื่องหมาย ,</p>
         </div>
       </div>
       <div class="search-wrap">
-        <input id="searchInput" type="text" placeholder="เชน 1,8,120 (สูงสุด 5 รายการ) แล้วกด Enter" inputmode="numeric">
+        <input id="searchInput" type="text" placeholder="เช่น 1,8,120 (สูงสุด 5 รายการ) แล้วกด Enter" inputmode="numeric">
         <button id="searchBtn">ค้นหา</button>
       </div>
       <div id="searchResult"></div>

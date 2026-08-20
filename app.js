@@ -445,7 +445,31 @@ document.getElementById('settingsSave').addEventListener('click', () => {
   startPolling();
 });
 
+// ---------- login gate ----------
+const LOGIN_ID = 'snt';
+const LOGIN_PASS = 'snt';
+
+function attemptLogin() {
+  const idVal = document.getElementById('loginId').value.trim();
+  const passVal = document.getElementById('loginPass').value;
+  const errEl = document.getElementById('loginError');
+  if (idVal === LOGIN_ID && passVal === LOGIN_PASS) {
+    document.getElementById('loginBackdrop').style.display = 'none';
+    document.querySelector('.shell').classList.remove('hidden');
+    initApp();
+  } else {
+    errEl.textContent = 'ID หรือ Password ไม่ถูกต้อง';
+  }
+}
+document.getElementById('loginBtn').addEventListener('click', attemptLogin);
+document.getElementById('loginPass').addEventListener('keydown', (e) => { if (e.key === 'Enter') attemptLogin(); });
+document.getElementById('loginId').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('loginPass').focus();
+});
+
 // ---------- init ----------
-populateColumnOptions();
-loadData();
-startPolling();
+function initApp() {
+  populateColumnOptions();
+  loadData();
+  startPolling();
+}
