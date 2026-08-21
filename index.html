@@ -18,12 +18,12 @@
         <div>
           <p class="eyebrow">Live sales dashboard</p>
           <h1>สรุปยอดขาย</h1>
-          <p class="subtitle">ข้อมูลสดจาก Google Sheet</p>
+          <p class="subtitle">ข้อมูลสดจาก Google Sheet — อัปเดตอัตโนมัติทุก 1 นาที</p>
         </div>
       </div>
       <div class="hero-right">
         <div class="hero-actions">
-          <button id="refreshBtn"><span>รีเฟรช</span></button>
+          <button id="refreshBtn"><span>รีเฟรชตอนนี้</span></button>
           <button class="ghost" id="settingsBtn">ตั้งค่า</button>
         </div>
         <div class="status" id="statusLine"><i></i><span id="statusText">กำลังโหลด...</span></div>
@@ -53,8 +53,7 @@
     <div class="panel">
       <div class="panel-head">
         <div>
-          <h2>สถานะสินค้า <span id="statusColTag"></span></h2>
-          <p>จำนวนสินค้าทั้งหมดแยกตามสถานะ</p>
+          <h2>สถานะสินค้า</h2>
         </div>
         <p id="totalItemsTag"></p>
       </div>
@@ -63,16 +62,36 @@
       </div>
     </div>
 
-    <div class="panel">
-      <div class="panel-head">
-        <div>
-          <h2>ภาพรวมสถานะ</h2>
-          <p>สัดส่วนสินค้าทั้งหมดตามสถานะ</p>
+    <div class="panel-row">
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>ภาพรวมสถานะ</h2>
+          </div>
+        </div>
+        <div class="donut-wrap" id="donutWrap">
+          <div class="donut" id="donutChart"><div class="donut-center"><strong id="donutTotal">0</strong><span>รายการ</span></div></div>
+          <div class="legend" id="legendArea"></div>
         </div>
       </div>
-      <div class="donut-wrap" id="donutWrap">
-        <div class="donut" id="donutChart"><div class="donut-center"><strong id="donutTotal">0</strong><span>รายการ</span></div></div>
-        <div class="legend" id="legendArea"></div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>แนวโน้มรายได้</h2>
+          </div>
+          <div class="trend-toggle" id="trendToggle">
+            <button class="trend-btn" data-range="minute">นาที</button>
+            <button class="trend-btn" data-range="hour">ชั่วโมง</button>
+            <button class="trend-btn" data-range="day">วัน</button>
+            <button class="trend-btn active" data-range="week">สัปดาห์</button>
+            <button class="trend-btn" data-range="month">เดือน</button>
+            <button class="trend-btn" data-range="year">ปี</button>
+          </div>
+        </div>
+        <div class="trend-chart-wrap" id="trendChartWrap">
+          <p class="empty">กำลังโหลดข้อมูลแนวโน้ม...</p>
+        </div>
       </div>
     </div>
 
@@ -80,11 +99,10 @@
       <div class="panel-head">
         <div>
           <h2>ค้นหาสินค้า</h2>
-          <p>ค้นหาด้วยเลข No. สินค้าค้นได้สูงสุด 5 รายการพร้อมกัน คั่นด้วยเครื่องหมาย ,</p>
         </div>
       </div>
       <div class="search-wrap">
-        <input id="searchInput" type="text" placeholder="ค้นหาเลข No.สินค้า" inputmode="numeric">
+        <input id="searchInput" type="text" placeholder="ค้นหาด้วยเลขสินค้า" inputmode="numeric">
         <button id="searchBtn">ค้นหา</button>
       </div>
       <div id="searchResult"></div>
@@ -124,7 +142,7 @@
 
     <div class="field">
       <label>ความถี่รีเฟรช (วินาที)</label>
-      <input id="cfgInterval" type="number" min="5" value="30">
+      <input id="cfgInterval" type="number" min="5" value="60">
     </div>
 
     <div class="settings-actions">

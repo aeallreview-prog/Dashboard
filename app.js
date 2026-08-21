@@ -22,7 +22,7 @@ const DEFAULTS = {
   sheetId: '1uWbyx7ojEQ5iZpY6XSlk2xFiAko5bdVcsjjyMg4_OJg',
   sheetName: '',
   statusCol: 'auto',
-  interval: 30,
+  interval: 60,
 };
 
 function loadConfig() {
@@ -354,15 +354,11 @@ async function loadData() {
 
     // Status column: manual override or auto-detect
     let statusColIdx;
-    let tag = '';
     if (config.statusCol && config.statusCol !== 'auto') {
       statusColIdx = colToIndex(config.statusCol);
-      tag = `(คอลัมน์ ${config.statusCol})`;
     } else {
       statusColIdx = detectStatusColumn(rows);
-      tag = statusColIdx >= 0 ? `(ตรวจพบอัตโนมัติ: คอลัมน์ ${indexToCol(statusColIdx)})` : '(ยังไม่พบคอลัมน์สถานะ)';
     }
-    document.getElementById('statusColTag').textContent = tag;
 
     let counts = { none: 0, shipped: 0, listed: 0, partial: 0, reserved: 0, soldout: 0 }, total = 0, other = 0;
     if (statusColIdx >= 0) {
@@ -395,8 +391,8 @@ async function loadData() {
 
 function startPolling() {
   if (pollTimer) clearInterval(pollTimer);
-  const ms = Math.max(5, Number(config.interval) || 30) * 1000;
-  pollTimer = setInterval(loadData, ms);
+  const ms = Math.max(5, Number(config.interval) || 60) * 1000;
+  pollTimer = setInterval(() => { loadData(); loadRevenueHistory(); }, ms);
 }
 
 // ---------- settings modal ----------
@@ -422,7 +418,7 @@ function closeSettings() {
   document.getElementById('settingsBackdrop').classList.remove('open');
 }
 
-document.getElementById('refreshBtn').addEventListener('click', loadData);
+document.getElementById('refreshBtn').addEventListener('click', () => { loadData(); loadRevenueHistory(); });
 document.getElementById('settingsBtn').addEventListener('click', openSettings);
 document.getElementById('searchBtn').addEventListener('click', doSearch);
 document.getElementById('searchInput').addEventListener('keydown', (e) => {
@@ -437,7 +433,7 @@ document.getElementById('settingsSave').addEventListener('click', () => {
     sheetId: document.getElementById('cfgSheetId').value.trim() || DEFAULTS.sheetId,
     sheetName: document.getElementById('cfgSheetName').value.trim(),
     statusCol: document.getElementById('cfgStatusCol').value,
-    interval: Number(document.getElementById('cfgInterval').value) || 30,
+    interval: Number(document.getElementById('cfgInterval').value) || 60,
   };
   saveConfig(config);
   closeSettings();
@@ -445,31 +441,172 @@ document.getElementById('settingsSave').addEventListener('click', () => {
   startPolling();
 });
 
-// ---------- login gate ----------
-const LOGIN_ID = 'snt';
-const LOGIN_PASS = 'snt';
+// ---------- revenue trend chart ----------
+let revenueHistory = []; // [{date: Date, value: number}], sorted ascending
+let trendRange = 'week';
 
-function attemptLogin() {
-  const idVal = document.getElementById('loginId').value.trim();
-  const passVal = document.getElementById('loginPass').value;
-  const errEl = document.getElementById('loginError');
-  if (idVal === LOGIN_ID && passVal === LOGIN_PASS) {
-    document.getElementById('loginBackdrop').style.display = 'none';
-    document.querySelector('.shell').classList.remove('hidden');
-    initApp();
-  } else {
-    errEl.textContent = 'ID หรือ Password ไม่ถูกต้อง';
+function buildHistoryUrl(cfg) {
+  const base = `https://docs.google.com/spreadsheets/d/${cfg.sheetId}/gviz/tq?tqx=out:json&headers=1&sheet=RevenueHistory`;
+  return base + '&_=' + Date.now();
+}
+
+function parseGvizDate(cell) {
+  // gviz encodes dates as v: "Date(y,m,d,h,mi,s)" or a formatted string in .f
+  if (!cell) return null;
+  if (typeof cell.v === 'string' && cell.v.startsWith('Date(')) {
+    const parts = cell.v.replace('Date(', '').replace(')', '').split(',').map(Number);
+    return new Date(parts[0], parts[1], parts[2], parts[3] || 0, parts[4] || 0, parts[5] || 0);
+  }
+  if (cell.f) {
+    const d = new Date(cell.f);
+    if (!isNaN(d)) return d;
+  }
+  if (typeof cell.v === 'string') {
+    const d = new Date(cell.v);
+    if (!isNaN(d)) return d;
+  }
+  return null;
+}
+
+async function loadRevenueHistory() {
+  try {
+    const res = await fetch(buildHistoryUrl(config), { cache: 'no-store' });
+    if (!res.ok) throw new Error('no history sheet');
+    const text = await res.text();
+    const table = parseGviz(text);
+    const rows = table.rows || [];
+    revenueHistory = rows.map(r => {
+      const dateCell = r.c && r.c[0];
+      const valCell = r.c && r.c[1];
+      const date = parseGvizDate(dateCell);
+      const value = cellNumber(valCell);
+      return (date && value !== null) ? { date, value } : null;
+    }).filter(Boolean).sort((a, b) => a.date - b.date);
+    renderTrendChart();
+  } catch (err) {
+    console.warn('revenue history not available yet:', err.message);
+    const wrap = document.getElementById('trendChartWrap');
+    wrap.innerHTML = '<p class="empty">ยังไม่มีข้อมูลย้อนหลัง — ต้องตั้งค่า Apps Script ให้บันทึกทุกวันจันทร์ก่อน (ดู README)</p>';
   }
 }
-document.getElementById('loginBtn').addEventListener('click', attemptLogin);
-document.getElementById('loginPass').addEventListener('keydown', (e) => { if (e.key === 'Enter') attemptLogin(); });
-document.getElementById('loginId').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') document.getElementById('loginPass').focus();
+
+const CHART_POINTS = 8; // number of columns shown on the x-axis, for every range
+
+function monthKey(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
+function yearKey(d) { return String(d.getFullYear()); }
+function hourKey(d) { return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate() + '-' + d.getHours(); }
+function minuteKey(d) { return hourKey(d) + '-' + d.getMinutes(); }
+function mondayOf(d) {
+  const day = d.getDay(); // 0=Sun..6=Sat
+  const diff = (day === 0 ? -6 : 1) - day;
+  const monday = new Date(d);
+  monday.setDate(d.getDate() + diff);
+  monday.setHours(0, 0, 0, 0);
+  return monday;
+}
+function weekKey(d) { return mondayOf(d).toISOString().slice(0, 10); }
+function dayKey(d) { return d.toISOString().slice(0, 10); }
+
+function lastPerGroup(keyFn) {
+  const map = new Map();
+  revenueHistory.forEach(p => {
+    const key = keyFn(p.date);
+    const existing = map.get(key);
+    if (!existing || p.date > existing.date) map.set(key, p);
+  });
+  return [...map.values()].sort((a, b) => a.date - b.date);
+}
+
+function aggregateHistory(range) {
+  const cfgs = {
+    minute: { key: minuteKey, fmt: { hour: '2-digit', minute: '2-digit' } },
+    hour:   { key: hourKey,   fmt: { hour: '2-digit', minute: '2-digit' } },
+    day:    { key: dayKey,    fmt: { day: '2-digit', month: '2-digit' } },
+    week:   { key: weekKey,   fmt: { day: '2-digit', month: '2-digit' } },
+    month:  { key: monthKey,  fmt: { month: 'short', year: '2-digit' } },
+    year:   { key: yearKey,   fmt: { year: 'numeric' } },
+  };
+  const c = cfgs[range] || cfgs.week;
+  return lastPerGroup(c.key).slice(-CHART_POINTS).map(p => ({
+    label: range === 'minute' || range === 'hour'
+      ? p.date.toLocaleTimeString('th-TH', c.fmt)
+      : p.date.toLocaleDateString('th-TH', c.fmt),
+    value: p.value,
+  }));
+}
+
+function buildLineChartSvg(points) {
+  const W = 560, H = 220, padL = 50, padR = 16, padT = 16, padB = 34;
+  const innerW = W - padL - padR, innerH = H - padT - padB;
+  const values = points.map(p => p.value);
+  const dataMax = Math.max(...values, 0);
+  const max = dataMax === 0 ? 1 : dataMax;
+  const min = 0;
+  const TICKS = 6; // ~6 evenly spaced price levels from 0 to max
+
+  const stepX = points.length > 1 ? innerW / (points.length - 1) : 0;
+  const xAt = i => padL + stepX * i;
+  const yAt = v => padT + innerH - ((v - min) / (max - min)) * innerH;
+
+  const linePts = points.map((p, i) => `${xAt(i).toFixed(1)},${yAt(p.value).toFixed(1)}`).join(' ');
+  const areaPts = `${xAt(0).toFixed(1)},${(padT + innerH).toFixed(1)} ${linePts} ${xAt(points.length - 1).toFixed(1)},${(padT + innerH).toFixed(1)}`;
+
+  const dots = points.map((p, i) =>
+    `<circle cx="${xAt(i).toFixed(1)}" cy="${yAt(p.value).toFixed(1)}" r="3.5" fill="#1a63a8"><title>${p.label}: ${fmtMoney(p.value)}</title></circle>`
+  ).join('');
+
+  const labels = points.map((p, i) =>
+    `<text x="${xAt(i).toFixed(1)}" y="${H - 10}" font-size="10" fill="#6e7c89" text-anchor="middle">${p.label}</text>`
+  ).join('');
+
+  // horizontal gridlines + labels, evenly spaced 0..max in TICKS steps
+  let gridlines = '';
+  for (let i = 0; i < TICKS; i++) {
+    const val = (max / (TICKS - 1)) * i;
+    const y = yAt(val);
+    gridlines += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${padL + innerW}" y2="${y.toFixed(1)}" stroke="#e7ebef" stroke-width="1"/>`;
+    gridlines += `<text x="${padL - 8}" y="${(y + 3).toFixed(1)}" font-size="10" fill="#6e7c89" text-anchor="end">${fmtMoney(val)}</text>`;
+  }
+
+  return `
+    <svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+      ${gridlines}
+      <polygon points="${areaPts}" fill="#1a63a8" opacity="0.08"/>
+      <polyline points="${linePts}" fill="none" stroke="#1a63a8" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+      ${dots}
+      ${labels}
+    </svg>
+  `;
+}
+
+function renderTrendChart() {
+  const wrap = document.getElementById('trendChartWrap');
+  if (!revenueHistory.length) {
+    wrap.innerHTML = '<p class="empty">ยังไม่มีข้อมูลย้อนหลัง — ต้องตั้งค่า Apps Script ให้บันทึกทุกวันจันทร์ก่อน (ดู README)</p>';
+    return;
+  }
+  const points = aggregateHistory(trendRange);
+  if (points.length < 2) {
+    wrap.innerHTML = '<p class="empty">มีข้อมูลแค่จุดเดียว รอสัปดาห์ถัดไปให้กราฟขึ้นเส้นได้</p>';
+    return;
+  }
+  wrap.innerHTML = buildLineChartSvg(points);
+}
+
+document.getElementById('trendToggle').addEventListener('click', (e) => {
+  const btn = e.target.closest('.trend-btn');
+  if (!btn) return;
+  document.querySelectorAll('.trend-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  trendRange = btn.dataset.range;
+  renderTrendChart();
 });
 
 // ---------- init ----------
 function initApp() {
   populateColumnOptions();
   loadData();
+  loadRevenueHistory();
   startPolling();
 }
+initApp();
