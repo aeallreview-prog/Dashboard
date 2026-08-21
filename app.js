@@ -441,8 +441,8 @@ document.getElementById('settingsSave').addEventListener('click', () => {
   startPolling();
 });
 
-// ---------- revenue trend chart ----------
-let revenueHistory = []; // [{date: Date, value: number}], sorted ascending
+// ---------- trend charts (revenue + profit) ----------
+let historyRows = []; // [{date, revenue, profit}], sorted ascending
 let trendRange = 'week';
 
 function buildHistoryUrl(cfg) {
@@ -475,18 +475,19 @@ async function loadRevenueHistory() {
     const text = await res.text();
     const table = parseGviz(text);
     const rows = table.rows || [];
-    revenueHistory = rows.map(r => {
-      const dateCell = r.c && r.c[0];
-      const valCell = r.c && r.c[1];
-      const date = parseGvizDate(dateCell);
-      const value = cellNumber(valCell);
-      return (date && value !== null) ? { date, value } : null;
+    historyRows = rows.map(r => {
+      const date = parseGvizDate(r.c && r.c[0]);
+      const revenue = cellNumber(r.c && r.c[1]);
+      const profit = cellNumber(r.c && r.c[2]);
+      return date ? { date, revenue, profit } : null;
     }).filter(Boolean).sort((a, b) => a.date - b.date);
     renderTrendChart();
+    renderProfitChart();
   } catch (err) {
     console.warn('revenue history not available yet:', err.message);
-    const wrap = document.getElementById('trendChartWrap');
-    wrap.innerHTML = '<p class="empty">ยังไม่มีข้อมูลย้อนหลัง — ต้องตั้งค่า Apps Script ให้บันทึกทุกวันจันทร์ก่อน (ดู README)</p>';
+    const emptyMsg = '<p class="empty">ยังไม่มีข้อมูลย้อนหลัง — ต้องตั้งค่า Apps Script ให้บันทึกก่อน (ดู README)</p>';
+    document.getElementById('trendSvgHolder').innerHTML = emptyMsg;
+    document.getElementById('profitSvgHolder').innerHTML = emptyMsg;
   }
 }
 
@@ -507,9 +508,9 @@ function mondayOf(d) {
 function weekKey(d) { return mondayOf(d).toISOString().slice(0, 10); }
 function dayKey(d) { return d.toISOString().slice(0, 10); }
 
-function lastPerGroup(keyFn) {
+function lastPerGroup(series, keyFn) {
   const map = new Map();
-  revenueHistory.forEach(p => {
+  series.forEach(p => {
     const key = keyFn(p.date);
     const existing = map.get(key);
     if (!existing || p.date > existing.date) map.set(key, p);
@@ -517,7 +518,14 @@ function lastPerGroup(keyFn) {
   return [...map.values()].sort((a, b) => a.date - b.date);
 }
 
-function aggregateHistory(range) {
+function buildSeries(metric) {
+  // metric: 'revenue' | 'profit'
+  return historyRows
+    .filter(r => r[metric] !== null && r[metric] !== undefined)
+    .map(r => ({ date: r.date, value: r[metric] }));
+}
+
+function aggregateHistory(series, range) {
   const cfgs = {
     minute: { key: minuteKey, fmt: { hour: '2-digit', minute: '2-digit' } },
     hour:   { key: hourKey,   fmt: { hour: '2-digit', minute: '2-digit' } },
@@ -527,7 +535,7 @@ function aggregateHistory(range) {
     year:   { key: yearKey,   fmt: { year: 'numeric' } },
   };
   const c = cfgs[range] || cfgs.week;
-  return lastPerGroup(c.key).slice(-CHART_POINTS).map(p => ({
+  return lastPerGroup(series, c.key).slice(-CHART_POINTS).map(p => ({
     label: range === 'minute' || range === 'hour'
       ? p.date.toLocaleTimeString('th-TH', c.fmt)
       : p.date.toLocaleDateString('th-TH', c.fmt),
@@ -535,12 +543,25 @@ function aggregateHistory(range) {
   }));
 }
 
-function buildLineChartSvg(points) {
-  const W = 560, H = 220, padL = 50, padR = 16, padT = 16, padB = 34;
+// round a value up to a "nice" number (1/2/5 × 10^n) for clean axis labels
+function niceCeil(value) {
+  if (value <= 0) return 1;
+  const exponent = Math.floor(Math.log10(value));
+  const fraction = value / Math.pow(10, exponent);
+  let niceFraction;
+  if (fraction <= 1) niceFraction = 1;
+  else if (fraction <= 2) niceFraction = 2;
+  else if (fraction <= 5) niceFraction = 5;
+  else niceFraction = 10;
+  return niceFraction * Math.pow(10, exponent);
+}
+
+function buildLineChartSvg(points, colorHex) {
+  const W = 560, H = 220, padL = 54, padR = 16, padT = 16, padB = 34;
   const innerW = W - padL - padR, innerH = H - padT - padB;
   const values = points.map(p => p.value);
   const dataMax = Math.max(...values, 0);
-  const max = dataMax === 0 ? 1 : dataMax;
+  const max = niceCeil(dataMax === 0 ? 1 : dataMax);
   const min = 0;
   const TICKS = 6; // ~6 evenly spaced price levels from 0 to max
 
@@ -552,7 +573,8 @@ function buildLineChartSvg(points) {
   const areaPts = `${xAt(0).toFixed(1)},${(padT + innerH).toFixed(1)} ${linePts} ${xAt(points.length - 1).toFixed(1)},${(padT + innerH).toFixed(1)}`;
 
   const dots = points.map((p, i) =>
-    `<circle cx="${xAt(i).toFixed(1)}" cy="${yAt(p.value).toFixed(1)}" r="3.5" fill="#1a63a8"><title>${p.label}: ${fmtMoney(p.value)}</title></circle>`
+    `<circle class="chart-dot" cx="${xAt(i).toFixed(1)}" cy="${yAt(p.value).toFixed(1)}" r="9" fill="${colorHex}" fill-opacity="0" stroke="${colorHex}" stroke-width="0" data-label="${p.label}" data-value="${fmtMoney(p.value)}"/>` +
+    `<circle cx="${xAt(i).toFixed(1)}" cy="${yAt(p.value).toFixed(1)}" r="3.5" fill="${colorHex}" style="pointer-events:none"/>`
   ).join('');
 
   const labels = points.map((p, i) =>
@@ -571,26 +593,55 @@ function buildLineChartSvg(points) {
   return `
     <svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
       ${gridlines}
-      <polygon points="${areaPts}" fill="#1a63a8" opacity="0.08"/>
-      <polyline points="${linePts}" fill="none" stroke="#1a63a8" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+      <polygon points="${areaPts}" fill="${colorHex}" opacity="0.08"/>
+      <polyline points="${linePts}" fill="none" stroke="${colorHex}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
       ${dots}
       ${labels}
     </svg>
   `;
 }
 
-function renderTrendChart() {
-  const wrap = document.getElementById('trendChartWrap');
-  if (!revenueHistory.length) {
-    wrap.innerHTML = '<p class="empty">ยังไม่มีข้อมูลย้อนหลัง — ต้องตั้งค่า Apps Script ให้บันทึกทุกวันจันทร์ก่อน (ดู README)</p>';
+function attachChartTooltip(holderEl, tooltipEl) {
+  const svg = holderEl.querySelector('svg');
+  if (!svg) return;
+  svg.querySelectorAll('.chart-dot').forEach(dot => {
+    dot.addEventListener('mouseenter', () => {
+      tooltipEl.textContent = `${dot.dataset.label} · ${dot.dataset.value}`;
+      tooltipEl.style.opacity = '1';
+    });
+    dot.addEventListener('mousemove', (e) => {
+      const rect = holderEl.parentElement.getBoundingClientRect();
+      let left = e.clientX - rect.left + 12;
+      let top = e.clientY - rect.top - 34;
+      tooltipEl.style.left = left + 'px';
+      tooltipEl.style.top = top + 'px';
+    });
+    dot.addEventListener('mouseleave', () => { tooltipEl.style.opacity = '0'; });
+  });
+}
+
+function renderChart(metric, holderId, tooltipId, colorHex, emptyLabel) {
+  const holder = document.getElementById(holderId);
+  const tooltip = document.getElementById(tooltipId);
+  const series = buildSeries(metric);
+  if (!series.length) {
+    holder.innerHTML = `<p class="empty">ยังไม่มีข้อมูล${emptyLabel}ย้อนหลัง — ต้องตั้งค่า Apps Script ให้บันทึกก่อน (ดู README)</p>`;
     return;
   }
-  const points = aggregateHistory(trendRange);
+  const points = aggregateHistory(series, trendRange);
   if (points.length < 2) {
-    wrap.innerHTML = '<p class="empty">มีข้อมูลแค่จุดเดียว รอสัปดาห์ถัดไปให้กราฟขึ้นเส้นได้</p>';
+    holder.innerHTML = '<p class="empty">มีข้อมูลแค่จุดเดียว รอรอบถัดไปให้กราฟขึ้นเส้นได้</p>';
     return;
   }
-  wrap.innerHTML = buildLineChartSvg(points);
+  holder.innerHTML = buildLineChartSvg(points, colorHex);
+  attachChartTooltip(holder, tooltip);
+}
+
+function renderTrendChart() {
+  renderChart('revenue', 'trendSvgHolder', 'trendTooltip', '#1a63a8', 'รายได้');
+}
+function renderProfitChart() {
+  renderChart('profit', 'profitSvgHolder', 'profitTooltip', '#f15e22', 'กำไร');
 }
 
 document.getElementById('trendToggle').addEventListener('click', (e) => {
@@ -600,6 +651,7 @@ document.getElementById('trendToggle').addEventListener('click', (e) => {
   btn.classList.add('active');
   trendRange = btn.dataset.range;
   renderTrendChart();
+  renderProfitChart();
 });
 
 // ---------- init ----------
