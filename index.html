@@ -89,6 +89,14 @@
             <button class="trend-btn" data-range="year">ปี</button>
           </div>
         </div>
+        <div class="trend-custom-range">
+          <label>ช่วงที่เลือก:</label>
+          <input type="date" id="trendFromDate">
+          <span style="color:var(--muted);font-size:11px;">ถึง</span>
+          <input type="date" id="trendToDate">
+          <button id="trendCustomBtn">ดูช่วงนี้</button>
+          <button class="trend-reset" id="trendResetBtn">รีเซ็ต</button>
+        </div>
         <div class="trend-chart-wrap" id="trendChartWrap">
           <div class="chart-svg-holder" id="trendSvgHolder"><p class="empty">กำลังโหลดข้อมูลแนวโน้ม...</p></div>
           <div class="chart-tooltip" id="trendTooltip"></div>

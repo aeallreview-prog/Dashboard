@@ -444,6 +444,7 @@ document.getElementById('settingsSave').addEventListener('click', () => {
 // ---------- trend charts (revenue + profit) ----------
 let historyRows = []; // [{date, revenue, profit}], sorted ascending
 let trendRange = 'week';
+let customRange = null; // { from: Date, to: Date } | null — overrides trendRange when set
 
 function buildHistoryUrl(cfg) {
   const base = `https://docs.google.com/spreadsheets/d/${cfg.sheetId}/gviz/tq?tqx=out:json&headers=1&sheet=RevenueHistory`;
@@ -543,6 +544,36 @@ function aggregateHistory(series, range) {
   }));
 }
 
+const CUSTOM_RANGE_MAX_POINTS = 40; // cap so long custom ranges stay readable
+
+function pointsForCustomRange(series, from, to) {
+  const filtered = series.filter(p => p.date >= from && p.date <= to);
+  const spanMs = to - from;
+  const showTime = spanMs <= 3 * 24 * 60 * 60 * 1000; // <=3 days: show date+time
+  const fmt = showTime
+    ? { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }
+    : { day: '2-digit', month: '2-digit', year: '2-digit' };
+  const label = d => d.toLocaleString('th-TH', fmt);
+
+  if (filtered.length <= CUSTOM_RANGE_MAX_POINTS) {
+    return filtered.map(p => ({ label: label(p.date), value: p.value }));
+  }
+  // too many raw points — bucket evenly across the range and keep the latest per bucket
+  const bucketMs = spanMs / CUSTOM_RANGE_MAX_POINTS;
+  const map = new Map();
+  filtered.forEach(p => {
+    const idx = Math.min(CUSTOM_RANGE_MAX_POINTS - 1, Math.floor((p.date - from) / bucketMs));
+    const existing = map.get(idx);
+    if (!existing || p.date > existing.date) map.set(idx, p);
+  });
+  return [...map.entries()].sort((a, b) => a[0] - b[0]).map(([, p]) => ({ label: label(p.date), value: p.value }));
+}
+
+function getPoints(series) {
+  if (customRange) return pointsForCustomRange(series, customRange.from, customRange.to);
+  return aggregateHistory(series, trendRange);
+}
+
 // round a value up to a "nice" number (1/2/5 × 10^n) for clean axis labels
 function niceCeil(value) {
   if (value <= 0) return 1;
@@ -577,9 +608,11 @@ function buildLineChartSvg(points, colorHex) {
     `<circle cx="${xAt(i).toFixed(1)}" cy="${yAt(p.value).toFixed(1)}" r="3.5" fill="${colorHex}" style="pointer-events:none"/>`
   ).join('');
 
-  const labels = points.map((p, i) =>
-    `<text x="${xAt(i).toFixed(1)}" y="${H - 10}" font-size="10" fill="#6e7c89" text-anchor="middle">${p.label}</text>`
-  ).join('');
+  const labelEvery = points.length > 10 ? Math.ceil(points.length / 8) : 1;
+  const labels = points.map((p, i) => {
+    if (i % labelEvery !== 0 && i !== points.length - 1) return '';
+    return `<text x="${xAt(i).toFixed(1)}" y="${H - 10}" font-size="10" fill="#6e7c89" text-anchor="middle">${p.label}</text>`;
+  }).join('');
 
   // horizontal gridlines + labels, evenly spaced 0..max in TICKS steps
   let gridlines = '';
@@ -628,7 +661,7 @@ function renderChart(metric, holderId, tooltipId, colorHex, emptyLabel) {
     holder.innerHTML = `<p class="empty">ยังไม่มีข้อมูล${emptyLabel}ย้อนหลัง — ต้องตั้งค่า Apps Script ให้บันทึกก่อน (ดู README)</p>`;
     return;
   }
-  const points = aggregateHistory(series, trendRange);
+  const points = getPoints(series);
   if (points.length < 2) {
     holder.innerHTML = '<p class="empty">มีข้อมูลแค่จุดเดียว รอรอบถัดไปให้กราฟขึ้นเส้นได้</p>';
     return;
@@ -647,9 +680,34 @@ function renderProfitChart() {
 document.getElementById('trendToggle').addEventListener('click', (e) => {
   const btn = e.target.closest('.trend-btn');
   if (!btn) return;
+  customRange = null;
   document.querySelectorAll('.trend-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   trendRange = btn.dataset.range;
+  renderTrendChart();
+  renderProfitChart();
+});
+
+document.getElementById('trendCustomBtn').addEventListener('click', () => {
+  const fromVal = document.getElementById('trendFromDate').value;
+  const toVal = document.getElementById('trendToDate').value;
+  if (!fromVal || !toVal) return;
+  const from = new Date(fromVal + 'T00:00:00');
+  const to = new Date(toVal + 'T23:59:59');
+  if (from > to) return;
+  customRange = { from, to };
+  document.querySelectorAll('.trend-btn').forEach(b => b.classList.remove('active'));
+  renderTrendChart();
+  renderProfitChart();
+});
+
+document.getElementById('trendResetBtn').addEventListener('click', () => {
+  customRange = null;
+  document.getElementById('trendFromDate').value = '';
+  document.getElementById('trendToDate').value = '';
+  document.querySelectorAll('.trend-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector('.trend-btn[data-range="week"]').classList.add('active');
+  trendRange = 'week';
   renderTrendChart();
   renderProfitChart();
 });
