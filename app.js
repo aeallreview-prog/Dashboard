@@ -418,6 +418,110 @@ function closeSettings() {
   document.getElementById('settingsBackdrop').classList.remove('open');
 }
 
+// ---------- sidebar navigation ----------
+document.querySelectorAll('.nav-item').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('view-' + btn.dataset.view).classList.add('active');
+  });
+});
+
+// ---------- calculate (price + shipping) ----------
+const SHIPPING_BASE = 50;
+const SHIPPING_PER_EXTRA_ITEM = 5;
+let lastCalcMessage = '';
+
+function buildCustomerMessage(subtotal, shipping, total) {
+  const fmt = n => Number(n).toLocaleString('th-TH');
+  return `รวมสินค้า ${fmt(subtotal)} + ค่าส่ง ${fmt(shipping)} (เริ่มต้น ${fmt(SHIPPING_BASE)} บ. + เพิ่มชิ้นละ ${fmt(SHIPPING_PER_EXTRA_ITEM)} บ.) = ${fmt(total)} บาทค่ะ 🌟🌈✨️`;
+}
+
+function copyCalcMessage() {
+  const btn = document.getElementById('calcCopyBtn');
+  navigator.clipboard.writeText(lastCalcMessage).then(() => {
+    const original = btn.textContent;
+    btn.textContent = 'คัดลอกแล้ว ✓';
+    setTimeout(() => { btn.textContent = original; }, 1500);
+  }).catch(() => {
+    btn.textContent = 'คัดลอกไม่สำเร็จ';
+    setTimeout(() => { btn.textContent = 'คัดลอกข้อความ'; }, 1500);
+  });
+}
+
+function doCalculate() {
+  const box = document.getElementById('calcResult');
+  const raw = document.getElementById('calcInput').value.trim();
+  if (!raw) { box.innerHTML = ''; return; }
+  if (!lastRows) {
+    box.innerHTML = '<p class="search-empty">ยังไม่มีข้อมูล กรุณารอให้โหลดข้อมูลก่อน</p>';
+    return;
+  }
+
+  const tokens = raw.split(',').map(s => s.trim()).filter(Boolean);
+  const found = [];
+  const notFound = [];
+
+  tokens.forEach(val => {
+    const row = findRowByNo(val);
+    if (!row) { notFound.push(val); return; }
+    const price = cellNumber(row.c && row.c[PRICE_COL]);
+    if (price === null) { notFound.push(val); return; }
+    found.push({ no: cellText(row.c && row.c[0]) || val, price });
+  });
+
+  if (!found.length) {
+    box.innerHTML = `<p class="search-empty">ไม่พบสินค้าที่ค้นหา: ${tokens.map(v => `"${v}"`).join(', ')}</p>`;
+    return;
+  }
+
+  const n = found.length;
+  const subtotal = found.reduce((sum, item) => sum + item.price, 0);
+  const extraItems = Math.max(0, n - 1);
+  const shippingExtra = extraItems * SHIPPING_PER_EXTRA_ITEM;
+  const shipping = SHIPPING_BASE + shippingExtra;
+  const total = subtotal + shipping;
+
+  const itemRows = found.map(item =>
+    `<div class="calc-row"><span>No. ${item.no}</span><span>${fmtMoney(item.price)}</span></div>`
+  ).join('');
+
+  const extraLine = extraItems > 0
+    ? `<div class="calc-row"><span>ค่าส่งเพิ่ม (${extraItems} ชิ้น × ${fmtMoney(SHIPPING_PER_EXTRA_ITEM)})</span><span>${fmtMoney(shippingExtra)}</span></div>`
+    : '';
+
+  const notFoundNote = notFound.length
+    ? `<p class="search-empty">ไม่พบสินค้า: ${notFound.map(v => `"${v}"`).join(', ')}</p>`
+    : '';
+
+  lastCalcMessage = buildCustomerMessage(subtotal, shipping, total);
+
+  box.innerHTML = `
+    <div class="search-result-card calc-card">
+      <div class="search-result-head"><strong>สรุปการคำนวณ (${n} ชิ้น)</strong></div>
+      <div class="calc-breakdown">
+        ${itemRows}
+        <div class="calc-divider"></div>
+        <div class="calc-row"><span>ราคาสินค้ารวม</span><span>${fmtMoney(subtotal)}</span></div>
+        <div class="calc-row"><span>ค่าส่งเริ่มต้น</span><span>${fmtMoney(SHIPPING_BASE)}</span></div>
+        ${extraLine}
+        <div class="calc-divider"></div>
+        <div class="calc-row calc-total"><span>รวมทั้งหมด</span><span>${fmtMoney(total)}</span></div>
+      </div>
+    </div>
+    ${notFoundNote}
+    <div class="calc-message-box">
+      <p class="calc-message-label">ข้อความแจ้งลูกค้า</p>
+      <p class="calc-message-text">${lastCalcMessage}</p>
+      <button class="ghost" id="calcCopyBtn" onclick="copyCalcMessage()">คัดลอกข้อความ</button>
+    </div>
+  `;
+}
+
+document.getElementById('calcBtn').addEventListener('click', doCalculate);
+document.getElementById('calcInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') doCalculate(); });
+
 document.getElementById('refreshBtn').addEventListener('click', () => { loadData(); loadRevenueHistory(); });
 document.getElementById('settingsBtn').addEventListener('click', openSettings);
 document.getElementById('searchBtn').addEventListener('click', doSearch);

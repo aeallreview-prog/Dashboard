@@ -10,7 +10,20 @@
 <body>
 
 <div class="shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <img src="logo.png" alt="seek n tique" class="sidebar-logo">
+    </div>
+    <nav class="sidebar-nav">
+      <button class="nav-item active" data-view="dashboard"><span class="nav-icon">📊</span><span>Dashboard</span></button>
+      <button class="nav-item" data-view="search"><span class="nav-icon">🔍</span><span>Search</span></button>
+      <button class="nav-item" data-view="calculate"><span class="nav-icon">🧮</span><span>Calculate</span></button>
+    </nav>
+  </aside>
+
   <div class="workspace">
+
+    <div class="view active" id="view-dashboard">
 
     <div class="hero">
       <div class="brand">
@@ -63,7 +76,7 @@
     </div>
 
     <div class="panel-row">
-      <div class="panel">
+      <div class="panel panel-donut">
         <div class="panel-head">
           <div>
             <h2>ภาพรวมสถานะ</h2>
@@ -75,7 +88,7 @@
         </div>
       </div>
 
-      <div class="panel">
+      <div class="panel panel-trend">
         <div class="panel-head">
           <div>
             <h2>แนวโน้มรายได้</h2>
@@ -109,6 +122,10 @@
       </div>
     </div>
 
+    </div>
+
+    <div class="view" id="view-search">
+
     <div class="panel">
       <div class="panel-head">
         <div>
@@ -120,6 +137,29 @@
         <button id="searchBtn">ค้นหา</button>
       </div>
       <div id="searchResult"></div>
+    </div>
+
+    </div>
+
+    <div class="view" id="view-calculate">
+
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>คำนวณราคา</h2>
+          <p>ใส่เลข No. ของสินค้า คั่นด้วย , เพื่อรวมราคาและคำนวณค่าส่ง</p>
+        </div>
+      </div>
+      <div class="search-wrap">
+        <input id="calcInput" type="text" placeholder="เช่น 8,10,20" inputmode="numeric">
+        <button id="calcBtn">คำนวณ</button>
+      </div>
+      <div id="calcResult"></div>
+      <p class="note" style="padding:0 24px 20px;text-align:left;">
+        สูตรค่าส่ง: เริ่มต้น 50 บาท + ชิ้นถัดไปจากชิ้นแรก ชิ้นละ 5 บาท
+      </p>
+    </div>
+
     </div>
 
     <div class="footer">

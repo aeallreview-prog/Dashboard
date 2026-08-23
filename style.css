@@ -37,9 +37,35 @@ body {
   background: var(--card);
   border-radius: 24px;
   box-shadow: 0 22px 60px rgba(20, 35, 55, .16);
+  display: flex;
+  align-items: stretch;
 }
 
-.workspace { min-width: 0; padding: 30px 34px 34px; }
+/* Sidebar navigation */
+.sidebar {
+  flex: none;
+  width: 210px;
+  background: linear-gradient(180deg, var(--blue), var(--blue-deep));
+  padding: 26px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+.sidebar-brand { display: flex; justify-content: center; }
+.sidebar-logo { width: 56px; height: 56px; object-fit: contain; border-radius: 14px; background: rgba(255,255,255,.12); padding: 6px; }
+.sidebar-nav { display: flex; flex-direction: column; gap: 6px; }
+.nav-item {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  background: transparent; color: rgba(255,255,255,.75); border-radius: 12px;
+  padding: 11px 14px; font: 600 13px 'DM Sans', sans-serif; text-align: left; justify-content: flex-start;
+}
+.nav-item:hover { background: rgba(255,255,255,.1); color: #fff; }
+.nav-item.active { background: #fff; color: var(--blue); box-shadow: 0 4px 14px rgba(0,0,0,.15); }
+.nav-icon { font-size: 15px; line-height: 1; }
+
+.workspace { flex: 1; min-width: 0; padding: 30px 34px 34px; }
+.view { display: none; }
+.view.active { display: block; }
 
 .hero { display: flex; justify-content: space-between; gap: 24px; align-items: center; padding-bottom: 26px; }
 .brand { display: flex; align-items: center; gap: 16px; }
@@ -129,9 +155,9 @@ button:disabled { opacity: .55; cursor: wait; }
 /* side-by-side panel row (donut + revenue trend) */
 .panel-row { display: flex; gap: 14px; align-items: stretch; }
 .panel-row .panel { margin-top: 14px; }
-.panel-row .panel:first-child { flex: 0 1 300px; min-width: 260px; display: flex; flex-direction: column; }
+.panel-row .panel:first-child { flex: 2 1 0; min-width: 260px; display: flex; flex-direction: column; }
 .panel-row .panel:first-child .donut-wrap { flex: 1; justify-content: center; }
-.panel-row .panel:last-child { flex: 1 1 420px; min-width: 320px; }
+.panel-row .panel:last-child { flex: 4 1 0; min-width: 320px; }
 
 .trend-subhead { padding: 20px 24px 0; }
 .trend-subhead h3 { margin: 0; font: 700 25px 'DM Sans', sans-serif; color: var(--ink); letter-spacing: -.05em; white-space: nowrap; }
@@ -194,6 +220,20 @@ button:disabled { opacity: .55; cursor: wait; }
 .search-field.status-field strong { color: #fff; }
 .search-empty { margin: 0 24px 24px; padding: 20px; text-align: center; color: var(--muted); background: #f8f9fa; border-radius: 14px; }
 
+/* Calculate view */
+.calc-card { margin: 0 24px 16px; }
+.calc-breakdown { padding: 18px 22px; display: flex; flex-direction: column; gap: 8px; }
+.calc-row { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; color: var(--ink); }
+.calc-row span:first-child { color: var(--muted); }
+.calc-row span:last-child { font: 600 13px 'DM Mono', monospace; }
+.calc-divider { height: 1px; background: var(--line); margin: 4px 0; }
+.calc-total { font-size: 16px; }
+.calc-total span { font-weight: 700; color: var(--blue); }
+.calc-total span:last-child { font: 700 17px 'DM Sans', sans-serif; }
+.calc-message-box { margin: 0 24px 20px; padding: 16px 18px; background: var(--paper); border-radius: 14px; }
+.calc-message-label { margin: 0 0 8px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+.calc-message-text { margin: 0 0 12px; font-size: 14px; color: var(--ink); line-height: 1.6; white-space: pre-wrap; }
+
 /* Settings panel */
 .settings-backdrop {
   position: fixed; inset: 0; background: rgba(17, 38, 58, .45);
@@ -224,7 +264,12 @@ button:disabled { opacity: .55; cursor: wait; }
 }
 
 @media (max-width: 720px) {
-  .shell { width: calc(100% - 24px); margin: 12px auto; border-radius: 18px; }
+  .shell { width: calc(100% - 24px); margin: 12px auto; border-radius: 18px; flex-direction: column; }
+  .sidebar { width: 100%; flex-direction: row; align-items: center; padding: 12px 14px; gap: 12px; border-radius: 18px 18px 0 0; }
+  .sidebar-brand { flex: none; }
+  .sidebar-logo { width: 38px; height: 38px; }
+  .sidebar-nav { flex-direction: row; flex: 1; overflow-x: auto; gap: 4px; }
+  .nav-item { flex: none; padding: 8px 12px; white-space: nowrap; }
   .workspace { padding: 22px 14px; }
   .hero, .panel-head { flex-direction: column; align-items: flex-start; gap: 16px; }
   .hero-right { align-items: flex-start; width: 100%; }
