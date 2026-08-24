@@ -425,13 +425,35 @@ document.querySelectorAll('.nav-item').forEach(btn => {
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById('view-' + btn.dataset.view).classList.add('active');
+    document.querySelector('.sidebar').classList.remove('open'); // close mobile dropdown after picking
   });
+});
+
+document.getElementById('hamburgerBtn').addEventListener('click', () => {
+  document.querySelector('.sidebar').classList.toggle('open');
+});
+document.addEventListener('click', (e) => {
+  const sidebar = document.querySelector('.sidebar');
+  const hamburger = document.getElementById('hamburgerBtn');
+  if (sidebar.classList.contains('open') && !sidebar.contains(e.target) && e.target !== hamburger) {
+    sidebar.classList.remove('open');
+  }
 });
 
 // ---------- calculate (price + shipping) ----------
 const SHIPPING_BASE = 50;
 const SHIPPING_PER_EXTRA_ITEM = 5;
 let lastCalcMessage = '';
+let calcItems = []; // [{no, price, qty}]
+
+// Price comes from the detail text in column C, formatted like "ราคา : 130"
+function extractPriceFromDetail(text) {
+  if (!text) return null;
+  const match = text.match(/ราคา\s*[:\-]?\s*([\d,]+(?:\.\d+)?)/);
+  if (!match) return null;
+  const num = parseFloat(match[1].replace(/,/g, ''));
+  return isNaN(num) ? null : num;
+}
 
 function buildCustomerMessage(subtotal, shipping, total) {
   const fmt = n => Number(n).toLocaleString('th-TH');
@@ -450,10 +472,45 @@ function copyCalcMessage() {
   });
 }
 
+function updateCalcQty(index, value) {
+  let qty = parseInt(value, 10);
+  if (!qty || qty < 1) qty = 1;
+  calcItems[index].qty = qty;
+  document.getElementById(`calcLine${index}`).textContent = fmtMoney(calcItems[index].price * qty);
+  renderCalcTotals();
+}
+
+function renderCalcTotals() {
+  const totalsBox = document.getElementById('calcTotalsBox');
+  if (!totalsBox || !calcItems.length) return;
+
+  const subtotal = calcItems.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const totalQty = calcItems.reduce((sum, item) => sum + item.qty, 0);
+  const extraItems = Math.max(0, totalQty - 1);
+  const shippingExtra = extraItems * SHIPPING_PER_EXTRA_ITEM;
+  const shipping = SHIPPING_BASE + shippingExtra;
+  const total = subtotal + shipping;
+
+  const extraLine = extraItems > 0
+    ? `<div class="calc-row"><span>ค่าส่งเพิ่ม (${extraItems} ชิ้น × ${fmtMoney(SHIPPING_PER_EXTRA_ITEM)})</span><span>${fmtMoney(shippingExtra)}</span></div>`
+    : '';
+
+  lastCalcMessage = buildCustomerMessage(subtotal, shipping, total);
+
+  totalsBox.innerHTML = `
+    <div class="calc-row"><span>ราคาสินค้ารวม (${totalQty} ชิ้น)</span><span>${fmtMoney(subtotal)}</span></div>
+    <div class="calc-row"><span>ค่าส่งเริ่มต้น</span><span>${fmtMoney(SHIPPING_BASE)}</span></div>
+    ${extraLine}
+    <div class="calc-divider"></div>
+    <div class="calc-row calc-total"><span>รวมทั้งหมด</span><span>${fmtMoney(total)}</span></div>
+  `;
+  document.getElementById('calcMessageText').textContent = lastCalcMessage;
+}
+
 function doCalculate() {
   const box = document.getElementById('calcResult');
   const raw = document.getElementById('calcInput').value.trim();
-  if (!raw) { box.innerHTML = ''; return; }
+  if (!raw) { box.innerHTML = ''; calcItems = []; return; }
   if (!lastRows) {
     box.innerHTML = '<p class="search-empty">ยังไม่มีข้อมูล กรุณารอให้โหลดข้อมูลก่อน</p>';
     return;
@@ -466,57 +523,52 @@ function doCalculate() {
   tokens.forEach(val => {
     const row = findRowByNo(val);
     if (!row) { notFound.push(val); return; }
-    const price = cellNumber(row.c && row.c[PRICE_COL]);
+    const detailText = cellText(row.c && row.c[DETAIL_COL]);
+    const price = extractPriceFromDetail(detailText);
     if (price === null) { notFound.push(val); return; }
     found.push({ no: cellText(row.c && row.c[0]) || val, price });
   });
 
   if (!found.length) {
-    box.innerHTML = `<p class="search-empty">ไม่พบสินค้าที่ค้นหา: ${tokens.map(v => `"${v}"`).join(', ')}</p>`;
+    box.innerHTML = `<p class="search-empty">ไม่พบราคาสินค้า (รูปแบบ "ราคา : ...") สำหรับ: ${tokens.map(v => `"${v}"`).join(', ')}</p>`;
+    calcItems = [];
     return;
   }
 
-  const n = found.length;
-  const subtotal = found.reduce((sum, item) => sum + item.price, 0);
-  const extraItems = Math.max(0, n - 1);
-  const shippingExtra = extraItems * SHIPPING_PER_EXTRA_ITEM;
-  const shipping = SHIPPING_BASE + shippingExtra;
-  const total = subtotal + shipping;
+  calcItems = found.map(item => ({ ...item, qty: 1 }));
 
-  const itemRows = found.map(item =>
-    `<div class="calc-row"><span>No. ${item.no}</span><span>${fmtMoney(item.price)}</span></div>`
-  ).join('');
-
-  const extraLine = extraItems > 0
-    ? `<div class="calc-row"><span>ค่าส่งเพิ่ม (${extraItems} ชิ้น × ${fmtMoney(SHIPPING_PER_EXTRA_ITEM)})</span><span>${fmtMoney(shippingExtra)}</span></div>`
-    : '';
+  const itemRows = calcItems.map((item, i) => `
+    <div class="calc-row calc-row-qty">
+      <span>No. ${item.no} ราคา ${fmtMoney(item.price)}</span>
+      <span class="calc-qty-input-wrap">
+        จำนวน <input type="number" class="calc-qty-input" min="1" value="1" oninput="updateCalcQty(${i}, this.value)"> ชิ้น
+        = <span id="calcLine${i}">${fmtMoney(item.price)}</span>
+      </span>
+    </div>
+  `).join('');
 
   const notFoundNote = notFound.length
-    ? `<p class="search-empty">ไม่พบสินค้า: ${notFound.map(v => `"${v}"`).join(', ')}</p>`
+    ? `<p class="search-empty">ไม่พบราคาสินค้า: ${notFound.map(v => `"${v}"`).join(', ')}</p>`
     : '';
-
-  lastCalcMessage = buildCustomerMessage(subtotal, shipping, total);
 
   box.innerHTML = `
     <div class="search-result-card calc-card">
-      <div class="search-result-head"><strong>สรุปการคำนวณ (${n} ชิ้น)</strong></div>
+      <div class="search-result-head"><strong>สรุปการคำนวณ (${found.length} รายการ)</strong></div>
       <div class="calc-breakdown">
         ${itemRows}
         <div class="calc-divider"></div>
-        <div class="calc-row"><span>ราคาสินค้ารวม</span><span>${fmtMoney(subtotal)}</span></div>
-        <div class="calc-row"><span>ค่าส่งเริ่มต้น</span><span>${fmtMoney(SHIPPING_BASE)}</span></div>
-        ${extraLine}
-        <div class="calc-divider"></div>
-        <div class="calc-row calc-total"><span>รวมทั้งหมด</span><span>${fmtMoney(total)}</span></div>
+        <div id="calcTotalsBox"></div>
       </div>
     </div>
     ${notFoundNote}
     <div class="calc-message-box">
       <p class="calc-message-label">ข้อความแจ้งลูกค้า</p>
-      <p class="calc-message-text">${lastCalcMessage}</p>
+      <p class="calc-message-text" id="calcMessageText"></p>
       <button class="ghost" id="calcCopyBtn" onclick="copyCalcMessage()">คัดลอกข้อความ</button>
     </div>
   `;
+
+  renderCalcTotals();
 }
 
 document.getElementById('calcBtn').addEventListener('click', doCalculate);

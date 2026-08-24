@@ -10,6 +10,7 @@
 <body>
 
 <div class="shell">
+  <button class="hamburger-btn" id="hamburgerBtn">☰</button>
   <aside class="sidebar">
     <div class="sidebar-brand">
       <img src="logo.png" alt="seek n tique" class="sidebar-logo">
@@ -63,28 +64,30 @@
       </div>
     </div>
 
-    <div class="panel">
-      <div class="panel-head">
-        <div>
-          <h2>สถานะสินค้า</h2>
-        </div>
-        <p id="totalItemsTag"></p>
-      </div>
-      <div class="status-grid" id="statusGrid">
-        <p class="empty">กำลังโหลดข้อมูลสถานะ...</p>
-      </div>
-    </div>
-
     <div class="panel-row">
-      <div class="panel panel-donut">
-        <div class="panel-head">
-          <div>
-            <h2>ภาพรวมสถานะ</h2>
+      <div class="panel-col">
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>สถานะสินค้า</h2>
+            </div>
+            <p id="totalItemsTag"></p>
+          </div>
+          <div class="status-grid" id="statusGrid">
+            <p class="empty">กำลังโหลดข้อมูลสถานะ...</p>
           </div>
         </div>
-        <div class="donut-wrap" id="donutWrap">
-          <div class="donut" id="donutChart"><div class="donut-center"><strong id="donutTotal">0</strong><span>รายการ</span></div></div>
-          <div class="legend" id="legendArea"></div>
+
+        <div class="panel panel-donut">
+          <div class="panel-head">
+            <div>
+              <h2>ภาพรวมสถานะ</h2>
+            </div>
+          </div>
+          <div class="donut-wrap" id="donutWrap">
+            <div class="donut" id="donutChart"><div class="donut-center"><strong id="donutTotal">0</strong><span>รายการ</span></div></div>
+            <div class="legend" id="legendArea"></div>
+          </div>
         </div>
       </div>
 
@@ -147,7 +150,7 @@
       <div class="panel-head">
         <div>
           <h2>คำนวณราคา</h2>
-          <p>ใส่เลข No. ของสินค้า คั่นด้วย , เพื่อรวมราคาและคำนวณค่าส่ง</p>
+          <p>ใส่เลข No. ของสินค้า คั่นด้วย , (ราคาดึงจากคอลัมน์ C รูปแบบ "ราคา : ...") แล้วปรับจำนวนชิ้นได้ทีหลัง</p>
         </div>
       </div>
       <div class="search-wrap">
@@ -156,7 +159,7 @@
       </div>
       <div id="calcResult"></div>
       <p class="note" style="padding:0 24px 20px;text-align:left;">
-        สูตรค่าส่ง: เริ่มต้น 50 บาท + ชิ้นถัดไปจากชิ้นแรก ชิ้นละ 5 บาท
+        สูตรค่าส่ง: เริ่มต้น 50 บาท + ชิ้นถัดไปจากชิ้นแรก ชิ้นละ 5 บาท (คิดจากจำนวนชิ้นรวมทั้งหมด)
       </p>
     </div>
 
