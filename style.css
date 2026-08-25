@@ -120,6 +120,10 @@ button {
 button.ghost { background: var(--paper); color: var(--ink); }
 button:hover { background: var(--accent); }
 button.ghost:hover { background: var(--line); color: var(--ink); }
+button.btn-yellow { background: #eab308; color: #fff; }
+button.btn-yellow:hover { background: #ca8a04; }
+button.btn-red { background: #d64545; color: #fff; }
+button.btn-red:hover { background: #b93b3b; }
 button:disabled { opacity: .55; cursor: wait; }
 
 .summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; padding: 6px 0 18px; }
@@ -271,8 +275,6 @@ button:disabled { opacity: .55; cursor: wait; }
 .template-text { margin: 0; font-size: 14px; color: var(--ink); line-height: 1.6; white-space: pre-wrap; word-break: break-word; flex: 1; }
 .template-actions { display: flex; flex-direction: column; gap: 6px; flex: none; }
 .template-actions button { font-size: 11px; padding: 7px 12px; }
-.template-delete { color: #d64545; }
-.template-delete:hover { background: #fdeaea; color: #d64545; }
 
 /* Settings panel */
 .settings-backdrop {

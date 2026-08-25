@@ -129,6 +129,10 @@ button {
 button.ghost { background: var(--paper); color: var(--ink); }
 button:hover { background: var(--accent); }
 button.ghost:hover { background: var(--line); color: var(--ink); }
+button.btn-yellow { background: #eab308; color: #fff; }
+button.btn-yellow:hover { background: #ca8a04; }
+button.btn-red { background: #d64545; color: #fff; }
+button.btn-red:hover { background: #b93b3b; }
 button:disabled { opacity: .55; cursor: wait; }
 
 .summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; padding: 6px 0 18px; }
@@ -280,8 +284,6 @@ button:disabled { opacity: .55; cursor: wait; }
 .template-text { margin: 0; font-size: 14px; color: var(--ink); line-height: 1.6; white-space: pre-wrap; word-break: break-word; flex: 1; }
 .template-actions { display: flex; flex-direction: column; gap: 6px; flex: none; }
 .template-actions button { font-size: 11px; padding: 7px 12px; }
-.template-delete { color: #d64545; }
-.template-delete:hover { background: #fdeaea; color: #d64545; }
 
 /* Settings panel */
 .settings-backdrop {
@@ -979,15 +981,26 @@ function closeSettings() {
 }
 
 // ---------- sidebar navigation ----------
+function loadActiveView() {
+  return 'dashboard'; // no persistent storage available in the artifact sandbox
+}
+function persistActiveView(view) {
+  // no-op here: current view only persists for this session (see download build for localStorage version)
+}
+
+function activateView(view) {
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + view));
+}
+
 document.querySelectorAll('.nav-item').forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('view-' + btn.dataset.view).classList.add('active');
+    activateView(btn.dataset.view);
+    persistActiveView(btn.dataset.view);
     document.querySelector('.sidebar').classList.remove('open'); // close mobile dropdown after picking
   });
 });
+activateView(loadActiveView());
 
 document.getElementById('hamburgerBtn').addEventListener('click', () => {
   document.querySelector('.sidebar').classList.toggle('open');
@@ -1144,7 +1157,7 @@ function doCalculate() {
     <div class="calc-message-box">
       <p class="calc-message-label">ข้อความแจ้งลูกค้า</p>
       <p class="calc-message-text" id="calcMessageText"></p>
-      <button class="ghost" id="calcCopyBtn" onclick="copyCalcMessage()">คัดลอกข้อความ</button>
+      <button class="btn-yellow" id="calcCopyBtn" onclick="copyCalcMessage()">คัดลอกข้อความ</button>
     </div>
   `;
 
@@ -1480,8 +1493,8 @@ function renderTemplates() {
     <div class="template-item">
       <p class="template-text">${escapeHtml(t)}</p>
       <div class="template-actions">
-        <button class="ghost" onclick="copyTemplate(${i}, this)">คัดลอก</button>
-        <button class="ghost template-delete" onclick="deleteTemplate(${i})">ลบ</button>
+        <button class="btn-yellow" onclick="copyTemplate(${i}, this)">คัดลอก</button>
+        <button class="btn-red" onclick="deleteTemplate(${i})">ลบ</button>
       </div>
     </div>
   `).join('');

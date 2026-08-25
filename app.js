@@ -25,6 +25,9 @@ const DEFAULTS = {
   interval: 60,
 };
 
+// NOTE: browser storage (localStorage/sessionStorage) is not available inside
+// the Claude artifact sandbox, so settings only persist for the current
+// session (in memory) rather than across reloads.
 function loadConfig() {
   try {
     const saved = JSON.parse(localStorage.getItem('sntDashboardConfig') || '{}');
@@ -419,15 +422,26 @@ function closeSettings() {
 }
 
 // ---------- sidebar navigation ----------
+function loadActiveView() {
+  return localStorage.getItem('sntActiveView') || 'dashboard';
+}
+function persistActiveView(view) {
+  localStorage.setItem('sntActiveView', view);
+}
+
+function activateView(view) {
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + view));
+}
+
 document.querySelectorAll('.nav-item').forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('view-' + btn.dataset.view).classList.add('active');
+    activateView(btn.dataset.view);
+    persistActiveView(btn.dataset.view);
     document.querySelector('.sidebar').classList.remove('open'); // close mobile dropdown after picking
   });
 });
+activateView(loadActiveView());
 
 document.getElementById('hamburgerBtn').addEventListener('click', () => {
   document.querySelector('.sidebar').classList.toggle('open');
@@ -584,7 +598,7 @@ function doCalculate() {
     <div class="calc-message-box">
       <p class="calc-message-label">ข้อความแจ้งลูกค้า</p>
       <p class="calc-message-text" id="calcMessageText"></p>
-      <button class="ghost" id="calcCopyBtn" onclick="copyCalcMessage()">คัดลอกข้อความ</button>
+      <button class="btn-yellow" id="calcCopyBtn" onclick="copyCalcMessage()">คัดลอกข้อความ</button>
     </div>
   `;
 
@@ -920,8 +934,8 @@ function renderTemplates() {
     <div class="template-item">
       <p class="template-text">${escapeHtml(t)}</p>
       <div class="template-actions">
-        <button class="ghost" onclick="copyTemplate(${i}, this)">คัดลอก</button>
-        <button class="ghost template-delete" onclick="deleteTemplate(${i})">ลบ</button>
+        <button class="btn-yellow" onclick="copyTemplate(${i}, this)">คัดลอก</button>
+        <button class="btn-red" onclick="deleteTemplate(${i})">ลบ</button>
       </div>
     </div>
   `).join('');
