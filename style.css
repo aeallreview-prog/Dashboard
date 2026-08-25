@@ -250,6 +250,8 @@ button:disabled { opacity: .55; cursor: wait; }
 .calc-card { margin: 0 24px 16px; }
 .calc-breakdown { padding: 18px 22px; display: flex; flex-direction: column; gap: 8px; }
 .calc-row { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; color: var(--ink); }
+.calc-checkbox-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink); cursor: pointer; padding: 2px 0; }
+.calc-checkbox-row input { width: 15px; height: 15px; accent-color: var(--blue); cursor: pointer; }
 .calc-row span:first-child { color: var(--muted); }
 .calc-row span:last-child { font: 600 13px 'DM Mono', monospace; }
 .calc-divider { height: 1px; background: var(--line); margin: 4px 0; }
@@ -262,6 +264,15 @@ button:disabled { opacity: .55; cursor: wait; }
 .calc-row-qty { align-items: center; }
 .calc-qty-input-wrap { display: flex; align-items: center; gap: 6px; color: var(--ink); font-size: 13px; }
 .calc-qty-input { width: 48px; padding: 4px 6px; border-radius: 8px; border: 1px solid var(--line); text-align: center; font: 600 13px 'DM Sans', sans-serif; }
+
+/* Templates view */
+.template-item { margin: 0 24px 12px; padding: 16px 18px; background: var(--paper); border-radius: 14px; display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; }
+.template-item:first-child { margin-top: 4px; }
+.template-text { margin: 0; font-size: 14px; color: var(--ink); line-height: 1.6; white-space: pre-wrap; word-break: break-word; flex: 1; }
+.template-actions { display: flex; flex-direction: column; gap: 6px; flex: none; }
+.template-actions button { font-size: 11px; padding: 7px 12px; }
+.template-delete { color: #d64545; }
+.template-delete:hover { background: #fdeaea; color: #d64545; }
 
 /* Settings panel */
 .settings-backdrop {

@@ -443,8 +443,10 @@ document.addEventListener('click', (e) => {
 // ---------- calculate (price + shipping) ----------
 const SHIPPING_BASE = 50;
 const SHIPPING_PER_EXTRA_ITEM = 5;
+const REMOTE_AREA_FEE = 50;
 let lastCalcMessage = '';
-let calcItems = []; // [{no, price, qty}]
+let calcItems = []; // [{no, price, qty, status}]
+let remoteAreaChecked = false;
 
 // Price comes from the detail text in column C, formatted like "ราคา : 130"
 function extractPriceFromDetail(text) {
@@ -455,9 +457,10 @@ function extractPriceFromDetail(text) {
   return isNaN(num) ? null : num;
 }
 
-function buildCustomerMessage(subtotal, shipping, total) {
+function buildCustomerMessage(subtotal, shipping, total, remoteArea) {
   const fmt = n => Number(n).toLocaleString('th-TH');
-  return `รวมสินค้า ${fmt(subtotal)} + ค่าส่ง ${fmt(shipping)} (เริ่มต้น ${fmt(SHIPPING_BASE)} บ. + เพิ่มชิ้นละ ${fmt(SHIPPING_PER_EXTRA_ITEM)} บ.) = ${fmt(total)} บาทค่ะ 🌟🌈✨️`;
+  const remoteNote = remoteArea ? ` + พื้นที่ห่างไกล ${fmt(REMOTE_AREA_FEE)} บ.` : '';
+  return `รวมสินค้า ${fmt(subtotal)} + ค่าส่ง ${fmt(shipping)} (เริ่มต้น ${fmt(SHIPPING_BASE)} บ. + เพิ่มชิ้นละ ${fmt(SHIPPING_PER_EXTRA_ITEM)} บ.${remoteNote}) = ${fmt(total)} บาทค่ะ 🌟🌈✨️`;
 }
 
 function copyCalcMessage() {
@@ -480,6 +483,11 @@ function updateCalcQty(index, value) {
   renderCalcTotals();
 }
 
+function toggleRemoteArea(checked) {
+  remoteAreaChecked = checked;
+  renderCalcTotals();
+}
+
 function renderCalcTotals() {
   const totalsBox = document.getElementById('calcTotalsBox');
   if (!totalsBox || !calcItems.length) return;
@@ -488,19 +496,29 @@ function renderCalcTotals() {
   const totalQty = calcItems.reduce((sum, item) => sum + item.qty, 0);
   const extraItems = Math.max(0, totalQty - 1);
   const shippingExtra = extraItems * SHIPPING_PER_EXTRA_ITEM;
-  const shipping = SHIPPING_BASE + shippingExtra;
+  const remoteFee = remoteAreaChecked ? REMOTE_AREA_FEE : 0;
+  const shipping = SHIPPING_BASE + shippingExtra + remoteFee;
   const total = subtotal + shipping;
 
   const extraLine = extraItems > 0
     ? `<div class="calc-row"><span>ค่าส่งเพิ่ม (${extraItems} ชิ้น × ${fmtMoney(SHIPPING_PER_EXTRA_ITEM)})</span><span>${fmtMoney(shippingExtra)}</span></div>`
     : '';
 
-  lastCalcMessage = buildCustomerMessage(subtotal, shipping, total);
+  const remoteFeeLine = remoteAreaChecked
+    ? `<div class="calc-row"><span>ค่าส่งพื้นที่ห่างไกล</span><span>${fmtMoney(REMOTE_AREA_FEE)}</span></div>`
+    : '';
+
+  lastCalcMessage = buildCustomerMessage(subtotal, shipping, total, remoteAreaChecked);
 
   totalsBox.innerHTML = `
     <div class="calc-row"><span>ราคาสินค้ารวม (${totalQty} ชิ้น)</span><span>${fmtMoney(subtotal)}</span></div>
     <div class="calc-row"><span>ค่าส่งเริ่มต้น</span><span>${fmtMoney(SHIPPING_BASE)}</span></div>
     ${extraLine}
+    <label class="calc-checkbox-row">
+      <input type="checkbox" ${remoteAreaChecked ? 'checked' : ''} onchange="toggleRemoteArea(this.checked)">
+      พื้นที่ห่างไกล (+${fmtMoney(REMOTE_AREA_FEE)})
+    </label>
+    ${remoteFeeLine}
     <div class="calc-divider"></div>
     <div class="calc-row calc-total"><span>รวมทั้งหมด</span><span>${fmtMoney(total)}</span></div>
   `;
@@ -516,6 +534,7 @@ function doCalculate() {
     return;
   }
 
+  remoteAreaChecked = false; // reset for a fresh calculation
   const tokens = raw.split(',').map(s => s.trim()).filter(Boolean);
   const found = [];
   const notFound = [];
@@ -526,7 +545,8 @@ function doCalculate() {
     const detailText = cellText(row.c && row.c[DETAIL_COL]);
     const price = extractPriceFromDetail(detailText);
     if (price === null) { notFound.push(val); return; }
-    found.push({ no: cellText(row.c && row.c[0]) || val, price });
+    const status = cellText(row.c && row.c[STATUS_DISPLAY_COL]);
+    found.push({ no: cellText(row.c && row.c[0]) || val, price, status });
   });
 
   if (!found.length) {
@@ -539,7 +559,7 @@ function doCalculate() {
 
   const itemRows = calcItems.map((item, i) => `
     <div class="calc-row calc-row-qty">
-      <span>No. ${item.no} ราคา ${fmtMoney(item.price)}</span>
+      <span>No. ${item.no}${item.status ? ` (${item.status})` : ''} ราคา ${fmtMoney(item.price)}</span>
       <span class="calc-qty-input-wrap">
         จำนวน <input type="number" class="calc-qty-input" min="1" value="1" oninput="updateCalcQty(${i}, this.value)"> ชิ้น
         = <span id="calcLine${i}">${fmtMoney(item.price)}</span>
@@ -800,8 +820,16 @@ function attachChartTooltip(holderEl, tooltipEl) {
     });
     dot.addEventListener('mousemove', (e) => {
       const rect = holderEl.parentElement.getBoundingClientRect();
+      const tw = tooltipEl.offsetWidth || 140;
+      const th = tooltipEl.offsetHeight || 30;
       let left = e.clientX - rect.left + 12;
       let top = e.clientY - rect.top - 34;
+      // keep the tooltip fully inside the chart container — flip to the other side of the
+      // cursor if it would overflow, then clamp as a last resort
+      if (left + tw > rect.width - 4) left = e.clientX - rect.left - tw - 12;
+      if (left < 4) left = 4;
+      if (top < 4) top = e.clientY - rect.top + 16;
+      if (top + th > rect.height - 4) top = rect.height - th - 4;
       tooltipEl.style.left = left + 'px';
       tooltipEl.style.top = top + 'px';
     });
@@ -867,6 +895,65 @@ document.getElementById('trendResetBtn').addEventListener('click', () => {
   renderTrendChart();
   renderProfitChart();
 });
+
+// ---------- message templates ----------
+let templates = [];
+function loadTemplates() {
+  try { return JSON.parse(localStorage.getItem('sntTemplates') || '[]'); } catch (e) { return []; }
+}
+function persistTemplates() {
+  localStorage.setItem('sntTemplates', JSON.stringify(templates));
+}
+templates = loadTemplates();
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function renderTemplates() {
+  const list = document.getElementById('templateList');
+  if (!templates.length) {
+    list.innerHTML = '<p class="empty">ยังไม่มีข้อความที่บันทึกไว้ — เพิ่มได้จากช่องด้านบน</p>';
+    return;
+  }
+  list.innerHTML = templates.map((t, i) => `
+    <div class="template-item">
+      <p class="template-text">${escapeHtml(t)}</p>
+      <div class="template-actions">
+        <button class="ghost" onclick="copyTemplate(${i}, this)">คัดลอก</button>
+        <button class="ghost template-delete" onclick="deleteTemplate(${i})">ลบ</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function addTemplate() {
+  const input = document.getElementById('templateInput');
+  const text = input.value.trim();
+  if (!text) return;
+  templates.push(text);
+  persistTemplates();
+  input.value = '';
+  renderTemplates();
+}
+
+function copyTemplate(i, btn) {
+  navigator.clipboard.writeText(templates[i]).then(() => {
+    const original = btn.textContent;
+    btn.textContent = 'คัดลอกแล้ว ✓';
+    setTimeout(() => { btn.textContent = original; }, 1200);
+  });
+}
+
+function deleteTemplate(i) {
+  templates.splice(i, 1);
+  persistTemplates();
+  renderTemplates();
+}
+
+document.getElementById('templateAddBtn').addEventListener('click', addTemplate);
+document.getElementById('templateInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addTemplate(); });
+renderTemplates();
 
 // ---------- init ----------
 function initApp() {
