@@ -276,8 +276,10 @@ button:disabled { opacity: .55; cursor: wait; }
 .search-empty { margin: 0 24px 24px; padding: 20px; text-align: center; color: var(--muted); background: #f8f9fa; border-radius: 14px; }
 
 /* Product table (Search view) */
-.table-filter { display: flex; align-items: center; gap: 8px; flex: none; }
+.table-filter { display: flex; align-items: center; gap: 14px; flex: none; flex-wrap: wrap; }
 .table-filter label { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.hide-sensitive-toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.hide-sensitive-toggle input { width: 15px; height: 15px; accent-color: var(--blue); cursor: pointer; }
 .table-filter select {
   padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line);
   font: 500 12px 'DM Sans', sans-serif; color: var(--ink); background: var(--paper);
@@ -293,7 +295,7 @@ button:disabled { opacity: .55; cursor: wait; }
 .product-table tr.product-row { cursor: pointer; }
 .product-table tr.product-row:hover td { background: var(--paper); }
 .product-table tr.product-row:hover td.price-cell-highlight { background: #dcf5e3; }
-.detail-cell-truncate { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.detail-cell-truncate { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .price-cell-highlight { background: #eafaf0; font-weight: 600; color: #16794a; }
 .product-row-expanded td { padding: 0; background: var(--paper); cursor: default; }
 .product-row-expanded .search-result-card { margin: 14px; }
@@ -305,6 +307,9 @@ button:disabled { opacity: .55; cursor: wait; }
 .pagination-num.active { background: var(--blue); color: #fff; }
 .pagination-ellipsis { color: var(--muted); padding: 0 2px; font-size: 12px; }
 .pagination-info { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.pagination-jump { display: flex; align-items: center; gap: 6px; margin-left: 4px; }
+.pagination-jump input { width: 64px; padding: 7px 8px; border-radius: 9px; border: 1px solid var(--line); font: 500 12px 'DM Sans', sans-serif; color: var(--ink); background: var(--paper); text-align: center; }
+.pagination-jump button { padding: 7px 12px; }
 
 /* Calculate view */
 .calc-card { margin: 0 24px 16px; }
@@ -534,6 +539,10 @@ button:disabled { opacity: .55; cursor: wait; }
           <h2>สินค้าทั้งหมด</h2>
         </div>
         <div class="table-filter">
+          <label class="hide-sensitive-toggle">
+            <input type="checkbox" id="hideSensitiveCheckbox" checked>
+            ปิดข้อมูลสำคัญ
+          </label>
           <label for="productStatusFilter">กรองตามสถานะ:</label>
           <select id="productStatusFilter">
             <option value="all">ทั้งหมด</option>
@@ -970,6 +979,14 @@ function doSearch() {
 const PRODUCT_PAGE_SIZE = 10;
 let productPage = 1;
 let productStatusFilterVal = 'all';
+let hideSensitiveData = true; // default: sensitive columns hidden
+
+// columns considered "sensitive" — hidden from the table when the toggle is checked
+const SENSITIVE_COLS = ['E', 'G', 'H', 'I', 'J', 'K', 'L'].map(colToIndex);
+
+function getVisibleCols() {
+  return hideSensitiveData ? DISPLAY_COLS.filter(i => !SENSITIVE_COLS.includes(i)) : DISPLAY_COLS;
+}
 
 function populateStatusFilterOptions() {
   const sel = document.getElementById('productStatusFilter');
@@ -984,6 +1001,13 @@ function populateStatusFilterOptions() {
   sel.addEventListener('change', () => {
     productStatusFilterVal = sel.value;
     productPage = 1;
+    renderProductTable();
+  });
+
+  const hideBox = document.getElementById('hideSensitiveCheckbox');
+  hideBox.checked = hideSensitiveData;
+  hideBox.addEventListener('change', () => {
+    hideSensitiveData = hideBox.checked;
     renderProductTable();
   });
 }
@@ -1001,7 +1025,7 @@ function getFilteredProductRows() {
 
 function renderProductTableHead() {
   const thead = document.getElementById('productTableHead');
-  thead.innerHTML = '<tr>' + DISPLAY_COLS.map(i => `<th>${headerLabel(i)}</th>`).join('') + '</tr>';
+  thead.innerHTML = '<tr>' + getVisibleCols().map(i => `<th>${headerLabel(i)}</th>`).join('') + '</tr>';
 }
 
 let expandedProductRows = new Set(); // set of No. values currently expanded
@@ -1014,7 +1038,8 @@ function toggleProductRow(noVal) {
 
 function renderProductTableRow(row) {
   const noVal = cellText(row.c && row.c[0]) || '-';
-  const cells = DISPLAY_COLS.map(i => {
+  const visibleCols = getVisibleCols();
+  const cells = visibleCols.map(i => {
     const rawText = cellText(row.c && row.c[i]);
     const text = rawText || '-';
     if (i === IMAGE_COL) {
@@ -1040,7 +1065,7 @@ function renderProductTableRow(row) {
   let html = `<tr class="product-row" onclick="toggleProductRow('${noKey}')">${cells}</tr>`;
 
   if (expandedProductRows.has(noVal)) {
-    html += `<tr class="product-row-expanded"><td colspan="${DISPLAY_COLS.length}">${renderSearchResult(row)}</td></tr>`;
+    html += `<tr class="product-row-expanded"><td colspan="${visibleCols.length}">${renderSearchResult(row)}</td></tr>`;
   }
   return html;
 }
@@ -1071,7 +1096,19 @@ function renderPagination(total, page, totalPages) {
     <div class="pagination-nums">${numberBtns}</div>
     <button class="ghost" ${page >= totalPages ? 'disabled' : ''} onclick="changeProductPage(${page + 1})">ถัดไป</button>
     <span class="pagination-info">(${total} รายการ)</span>
+    <div class="pagination-jump">
+      <input type="number" id="pageJumpInput" min="1" max="${totalPages}" placeholder="เลขหน้า" onkeydown="if(event.key==='Enter')jumpToPage(${totalPages})">
+      <button class="ghost" onclick="jumpToPage(${totalPages})">ไป</button>
+    </div>
   `;
+}
+
+function jumpToPage(totalPages) {
+  const input = document.getElementById('pageJumpInput');
+  let p = parseInt(input.value, 10);
+  if (!p || p < 1) p = 1;
+  if (p > totalPages) p = totalPages;
+  changeProductPage(p);
 }
 
 function changeProductPage(p) {
@@ -1085,7 +1122,7 @@ function renderProductTable() {
   const tbody = document.getElementById('productTableBody');
 
   if (!lastRows) {
-    tbody.innerHTML = `<tr><td colspan="${DISPLAY_COLS.length}">กำลังโหลดข้อมูล...</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="${getVisibleCols().length}">กำลังโหลดข้อมูล...</td></tr>`;
     document.getElementById('productPagination').innerHTML = '';
     return;
   }
@@ -1096,7 +1133,7 @@ function renderProductTable() {
   if (productPage < 1) productPage = 1;
 
   if (!filtered.length) {
-    tbody.innerHTML = `<tr><td colspan="${DISPLAY_COLS.length}">ไม่พบสินค้าตามเงื่อนไขที่เลือก</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="${getVisibleCols().length}">ไม่พบสินค้าตามเงื่อนไขที่เลือก</td></tr>`;
     document.getElementById('productPagination').innerHTML = '';
     return;
   }
@@ -1200,7 +1237,7 @@ function closeSettings() {
 
 // ---------- sidebar navigation ----------
 function loadActiveView() {
-  return 'dashboard'; // no persistent storage available in the artifact sandbox
+  return 'search'; // default landing view; no persistent storage available in the artifact sandbox
 }
 function persistActiveView(view) {
   // no-op here: current view only persists for this session (see download build for localStorage version)

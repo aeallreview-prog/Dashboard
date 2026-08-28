@@ -336,6 +336,14 @@ function doSearch() {
 const PRODUCT_PAGE_SIZE = 10;
 let productPage = 1;
 let productStatusFilterVal = 'all';
+let hideSensitiveData = true; // default: sensitive columns hidden
+
+// columns considered "sensitive" — hidden from the table when the toggle is checked
+const SENSITIVE_COLS = ['E', 'G', 'H', 'I', 'J', 'K', 'L'].map(colToIndex);
+
+function getVisibleCols() {
+  return hideSensitiveData ? DISPLAY_COLS.filter(i => !SENSITIVE_COLS.includes(i)) : DISPLAY_COLS;
+}
 
 function populateStatusFilterOptions() {
   const sel = document.getElementById('productStatusFilter');
@@ -350,6 +358,13 @@ function populateStatusFilterOptions() {
   sel.addEventListener('change', () => {
     productStatusFilterVal = sel.value;
     productPage = 1;
+    renderProductTable();
+  });
+
+  const hideBox = document.getElementById('hideSensitiveCheckbox');
+  hideBox.checked = hideSensitiveData;
+  hideBox.addEventListener('change', () => {
+    hideSensitiveData = hideBox.checked;
     renderProductTable();
   });
 }
@@ -367,7 +382,7 @@ function getFilteredProductRows() {
 
 function renderProductTableHead() {
   const thead = document.getElementById('productTableHead');
-  thead.innerHTML = '<tr>' + DISPLAY_COLS.map(i => `<th>${headerLabel(i)}</th>`).join('') + '</tr>';
+  thead.innerHTML = '<tr>' + getVisibleCols().map(i => `<th>${headerLabel(i)}</th>`).join('') + '</tr>';
 }
 
 let expandedProductRows = new Set(); // set of No. values currently expanded
@@ -380,7 +395,8 @@ function toggleProductRow(noVal) {
 
 function renderProductTableRow(row) {
   const noVal = cellText(row.c && row.c[0]) || '-';
-  const cells = DISPLAY_COLS.map(i => {
+  const visibleCols = getVisibleCols();
+  const cells = visibleCols.map(i => {
     const rawText = cellText(row.c && row.c[i]);
     const text = rawText || '-';
     if (i === IMAGE_COL) {
@@ -406,7 +422,7 @@ function renderProductTableRow(row) {
   let html = `<tr class="product-row" onclick="toggleProductRow('${noKey}')">${cells}</tr>`;
 
   if (expandedProductRows.has(noVal)) {
-    html += `<tr class="product-row-expanded"><td colspan="${DISPLAY_COLS.length}">${renderSearchResult(row)}</td></tr>`;
+    html += `<tr class="product-row-expanded"><td colspan="${visibleCols.length}">${renderSearchResult(row)}</td></tr>`;
   }
   return html;
 }
@@ -437,7 +453,19 @@ function renderPagination(total, page, totalPages) {
     <div class="pagination-nums">${numberBtns}</div>
     <button class="ghost" ${page >= totalPages ? 'disabled' : ''} onclick="changeProductPage(${page + 1})">ถัดไป</button>
     <span class="pagination-info">(${total} รายการ)</span>
+    <div class="pagination-jump">
+      <input type="number" id="pageJumpInput" min="1" max="${totalPages}" placeholder="เลขหน้า" onkeydown="if(event.key==='Enter')jumpToPage(${totalPages})">
+      <button class="ghost" onclick="jumpToPage(${totalPages})">ไป</button>
+    </div>
   `;
+}
+
+function jumpToPage(totalPages) {
+  const input = document.getElementById('pageJumpInput');
+  let p = parseInt(input.value, 10);
+  if (!p || p < 1) p = 1;
+  if (p > totalPages) p = totalPages;
+  changeProductPage(p);
 }
 
 function changeProductPage(p) {
@@ -451,7 +479,7 @@ function renderProductTable() {
   const tbody = document.getElementById('productTableBody');
 
   if (!lastRows) {
-    tbody.innerHTML = `<tr><td colspan="${DISPLAY_COLS.length}">กำลังโหลดข้อมูล...</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="${getVisibleCols().length}">กำลังโหลดข้อมูล...</td></tr>`;
     document.getElementById('productPagination').innerHTML = '';
     return;
   }
@@ -462,7 +490,7 @@ function renderProductTable() {
   if (productPage < 1) productPage = 1;
 
   if (!filtered.length) {
-    tbody.innerHTML = `<tr><td colspan="${DISPLAY_COLS.length}">ไม่พบสินค้าตามเงื่อนไขที่เลือก</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="${getVisibleCols().length}">ไม่พบสินค้าตามเงื่อนไขที่เลือก</td></tr>`;
     document.getElementById('productPagination').innerHTML = '';
     return;
   }
@@ -566,7 +594,7 @@ function closeSettings() {
 
 // ---------- sidebar navigation ----------
 function loadActiveView() {
-  return localStorage.getItem('sntActiveView') || 'dashboard';
+  return localStorage.getItem('sntActiveView') || 'search';
 }
 function persistActiveView(view) {
   localStorage.setItem('sntActiveView', view);

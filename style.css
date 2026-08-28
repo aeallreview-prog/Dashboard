@@ -267,8 +267,10 @@ button:disabled { opacity: .55; cursor: wait; }
 .search-empty { margin: 0 24px 24px; padding: 20px; text-align: center; color: var(--muted); background: #f8f9fa; border-radius: 14px; }
 
 /* Product table (Search view) */
-.table-filter { display: flex; align-items: center; gap: 8px; flex: none; }
+.table-filter { display: flex; align-items: center; gap: 14px; flex: none; flex-wrap: wrap; }
 .table-filter label { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.hide-sensitive-toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.hide-sensitive-toggle input { width: 15px; height: 15px; accent-color: var(--blue); cursor: pointer; }
 .table-filter select {
   padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line);
   font: 500 12px 'DM Sans', sans-serif; color: var(--ink); background: var(--paper);
@@ -284,7 +286,7 @@ button:disabled { opacity: .55; cursor: wait; }
 .product-table tr.product-row { cursor: pointer; }
 .product-table tr.product-row:hover td { background: var(--paper); }
 .product-table tr.product-row:hover td.price-cell-highlight { background: #dcf5e3; }
-.detail-cell-truncate { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.detail-cell-truncate { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .price-cell-highlight { background: #eafaf0; font-weight: 600; color: #16794a; }
 .product-row-expanded td { padding: 0; background: var(--paper); cursor: default; }
 .product-row-expanded .search-result-card { margin: 14px; }
@@ -296,6 +298,9 @@ button:disabled { opacity: .55; cursor: wait; }
 .pagination-num.active { background: var(--blue); color: #fff; }
 .pagination-ellipsis { color: var(--muted); padding: 0 2px; font-size: 12px; }
 .pagination-info { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.pagination-jump { display: flex; align-items: center; gap: 6px; margin-left: 4px; }
+.pagination-jump input { width: 64px; padding: 7px 8px; border-radius: 9px; border: 1px solid var(--line); font: 500 12px 'DM Sans', sans-serif; color: var(--ink); background: var(--paper); text-align: center; }
+.pagination-jump button { padding: 7px 12px; }
 
 /* Calculate view */
 .calc-card { margin: 0 24px 16px; }
