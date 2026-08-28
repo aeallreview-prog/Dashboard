@@ -5,23 +5,26 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>seek n tique — แดชบอร์ดยอดขาย</title>
 <link rel="icon" href="logo.png">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&text=table_chart_view,content_paste_search,calculate,sticky_note_2&display=block" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&text=table_chart_view,content_paste_search,calculate,sticky_note_2,chevron_left&display=block" />
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
 <div class="shell">
   <button class="hamburger-btn" id="hamburgerBtn">☰</button>
-  <aside class="sidebar">
+  <aside class="sidebar" id="sidebarEl">
     <div class="sidebar-brand">
       <img src="logo.png" alt="seek n tique" class="sidebar-logo">
     </div>
     <nav class="sidebar-nav">
-      <button class="nav-item active" data-view="dashboard"><span class="material-symbols-outlined nav-icon">table_chart_view</span><span>Dashboard</span></button>
-      <button class="nav-item" data-view="search"><span class="material-symbols-outlined nav-icon">content_paste_search</span><span>Search</span></button>
-      <button class="nav-item" data-view="calculate"><span class="material-symbols-outlined nav-icon">calculate</span><span>Calculate</span></button>
-      <button class="nav-item" data-view="templates"><span class="material-symbols-outlined nav-icon">sticky_note_2</span><span>Templates</span></button>
+      <button class="nav-item active" data-view="dashboard" title="Dashboard"><span class="material-symbols-outlined nav-icon">table_chart_view</span><span>Dashboard</span></button>
+      <button class="nav-item" data-view="search" title="Search"><span class="material-symbols-outlined nav-icon">content_paste_search</span><span>Search</span></button>
+      <button class="nav-item" data-view="calculate" title="Calculate"><span class="material-symbols-outlined nav-icon">calculate</span><span>Calculate</span></button>
+      <button class="nav-item" data-view="templates" title="Templates"><span class="material-symbols-outlined nav-icon">sticky_note_2</span><span>Templates</span></button>
     </nav>
+    <button class="sidebar-collapse-btn" id="sidebarCollapseBtn" title="ย่อ/ขยายเมนู">
+      <span class="material-symbols-outlined">chevron_left</span>
+    </button>
   </aside>
 
   <div class="workspace">
@@ -142,6 +145,27 @@
         <button id="searchBtn">ค้นหา</button>
       </div>
       <div id="searchResult"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>สินค้าทั้งหมด</h2>
+        </div>
+        <div class="table-filter">
+          <label for="productStatusFilter">กรองตามสถานะ:</label>
+          <select id="productStatusFilter">
+            <option value="all">ทั้งหมด</option>
+          </select>
+        </div>
+      </div>
+      <div class="product-table-wrap">
+        <table class="product-table">
+          <thead id="productTableHead"></thead>
+          <tbody id="productTableBody"></tbody>
+        </table>
+      </div>
+      <div class="pagination" id="productPagination"></div>
     </div>
 
     </div>

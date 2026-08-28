@@ -5,11 +5,11 @@
 
 const STATUS_DEFS = [
   { key: 'none',     label: 'ยังไม่ได้ลงขาย', color: 'var(--status-none)' },
-  { key: 'shipped',  label: 'ส่งแล้ว',        color: 'var(--status-shipped)' },
   { key: 'listed',   label: 'ลงขายแล้ว',      color: 'var(--status-listed)' },
   { key: 'partial',  label: 'ขายได้บางส่วน',  color: 'var(--status-partial)' },
   { key: 'reserved', label: 'ติดจอง',         color: 'var(--status-reserved)' },
   { key: 'soldout',  label: 'ขายหมดแล้ว',     color: 'var(--status-soldout)' },
+  { key: 'shipped',  label: 'ส่งแล้ว',        color: 'var(--status-shipped)' },
 ];
 const STATUS_COLOR_HEX = {
   none: '#97a2ad', shipped: '#1f9d63', listed: '#1a63a8', partial: '#eab308',
@@ -230,7 +230,7 @@ const DETAIL_COL = colToIndex('C'); // detail/description column - shown wider
 const PRICE_COL = colToIndex('F'); // ราคาขาย - green highlight
 const STATUS_DISPLAY_COL = colToIndex('O'); // สถานะ - colored like the donut chart
 // Only these columns are shown in the search result, in this exact order.
-const DISPLAY_COLS = ['A', 'P', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'O'].map(colToIndex);
+const DISPLAY_COLS = ['A', 'P', 'C', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'O'].map(colToIndex);
 
 function headerLabel(colIdx) {
   const letter = indexToCol(colIdx);
@@ -332,6 +332,148 @@ function doSearch() {
   box.innerHTML = notice + html;
 }
 
+// ---------- product table (all products, filterable + paginated) ----------
+const PRODUCT_PAGE_SIZE = 10;
+let productPage = 1;
+let productStatusFilterVal = 'all';
+
+function populateStatusFilterOptions() {
+  const sel = document.getElementById('productStatusFilter');
+  if (sel.dataset.populated) return;
+  STATUS_DEFS.forEach(def => {
+    const opt = document.createElement('option');
+    opt.value = def.label;
+    opt.textContent = def.label;
+    sel.appendChild(opt);
+  });
+  sel.dataset.populated = '1';
+  sel.addEventListener('change', () => {
+    productStatusFilterVal = sel.value;
+    productPage = 1;
+    renderProductTable();
+  });
+}
+
+function getAllProductRows() {
+  if (!lastRows) return [];
+  return lastRows.filter((row, idx) => idx > 0 && rowHasProduct(row));
+}
+
+function getFilteredProductRows() {
+  const rows = getAllProductRows();
+  if (productStatusFilterVal === 'all') return rows;
+  return rows.filter(row => cellText(row.c && row.c[STATUS_DISPLAY_COL]) === productStatusFilterVal);
+}
+
+function renderProductTableHead() {
+  const thead = document.getElementById('productTableHead');
+  thead.innerHTML = '<tr>' + DISPLAY_COLS.map(i => `<th>${headerLabel(i)}</th>`).join('') + '</tr>';
+}
+
+let expandedProductRows = new Set(); // set of No. values currently expanded
+
+function toggleProductRow(noVal) {
+  if (expandedProductRows.has(noVal)) expandedProductRows.delete(noVal);
+  else expandedProductRows.add(noVal);
+  renderProductTable();
+}
+
+function renderProductTableRow(row) {
+  const noVal = cellText(row.c && row.c[0]) || '-';
+  const cells = DISPLAY_COLS.map(i => {
+    const rawText = cellText(row.c && row.c[i]);
+    const text = rawText || '-';
+    if (i === IMAGE_COL) {
+      return looksLikeImageUrl(rawText)
+        ? `<td><img src="${resolveImageUrl(rawText)}" alt="รูปสินค้า No. ${noVal}" loading="lazy" onerror="handleImgError(this)"></td>`
+        : `<td>-</td>`;
+    }
+    if (i === STATUS_DISPLAY_COL) {
+      const key = LABEL_TO_KEY[rawText];
+      const bg = key ? STATUS_COLOR_HEX[key] : '#97a2ad';
+      return `<td><span class="status-pill" style="background:${bg}">${text}</span></td>`;
+    }
+    if (i === DETAIL_COL) {
+      return `<td><div class="detail-cell-truncate">${text}</div></td>`;
+    }
+    if (i === PRICE_COL) {
+      return `<td class="price-cell-highlight">${text}</td>`;
+    }
+    return `<td>${text}</td>`;
+  }).join('');
+
+  const noKey = escapeHtml(noVal);
+  let html = `<tr class="product-row" onclick="toggleProductRow('${noKey}')">${cells}</tr>`;
+
+  if (expandedProductRows.has(noVal)) {
+    html += `<tr class="product-row-expanded"><td colspan="${DISPLAY_COLS.length}">${renderSearchResult(row)}</td></tr>`;
+  }
+  return html;
+}
+
+function buildPageNumbers(current, total) {
+  const nums = [];
+  const windowSize = 1;
+  for (let p = 1; p <= total; p++) {
+    if (p === 1 || p === total || (p >= current - windowSize && p <= current + windowSize)) {
+      nums.push(p);
+    } else if (nums[nums.length - 1] !== '...') {
+      nums.push('...');
+    }
+  }
+  return nums;
+}
+
+function renderPagination(total, page, totalPages) {
+  const box = document.getElementById('productPagination');
+  if (totalPages <= 1) { box.innerHTML = ''; return; }
+  const numberBtns = buildPageNumbers(page, totalPages).map(p =>
+    p === '...'
+      ? `<span class="pagination-ellipsis">…</span>`
+      : `<button class="ghost pagination-num ${p === page ? 'active' : ''}" onclick="changeProductPage(${p})">${p}</button>`
+  ).join('');
+  box.innerHTML = `
+    <button class="ghost" ${page <= 1 ? 'disabled' : ''} onclick="changeProductPage(${page - 1})">ก่อนหน้า</button>
+    <div class="pagination-nums">${numberBtns}</div>
+    <button class="ghost" ${page >= totalPages ? 'disabled' : ''} onclick="changeProductPage(${page + 1})">ถัดไป</button>
+    <span class="pagination-info">(${total} รายการ)</span>
+  `;
+}
+
+function changeProductPage(p) {
+  productPage = p;
+  renderProductTable();
+}
+
+function renderProductTable() {
+  populateStatusFilterOptions();
+  renderProductTableHead();
+  const tbody = document.getElementById('productTableBody');
+
+  if (!lastRows) {
+    tbody.innerHTML = `<tr><td colspan="${DISPLAY_COLS.length}">กำลังโหลดข้อมูล...</td></tr>`;
+    document.getElementById('productPagination').innerHTML = '';
+    return;
+  }
+
+  const filtered = getFilteredProductRows();
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PRODUCT_PAGE_SIZE));
+  if (productPage > totalPages) productPage = totalPages;
+  if (productPage < 1) productPage = 1;
+
+  if (!filtered.length) {
+    tbody.innerHTML = `<tr><td colspan="${DISPLAY_COLS.length}">ไม่พบสินค้าตามเงื่อนไขที่เลือก</td></tr>`;
+    document.getElementById('productPagination').innerHTML = '';
+    return;
+  }
+
+  const start = (productPage - 1) * PRODUCT_PAGE_SIZE;
+  const pageRows = filtered.slice(start, start + PRODUCT_PAGE_SIZE);
+  tbody.innerHTML = pageRows.map(renderProductTableRow).join('');
+  renderPagination(filtered.length, productPage, totalPages);
+}
+
+
 // ---------- main fetch ----------
 async function loadData() {
   document.getElementById('refreshBtn').disabled = true;
@@ -374,6 +516,7 @@ async function loadData() {
 
     renderStatusGrid(counts, total);
     renderDonut(counts, total);
+    renderProductTable();
 
     // keep an active search result live/up to date after each refresh
     if (document.getElementById('searchInput').value.trim()) doSearch();
@@ -442,6 +585,20 @@ document.querySelectorAll('.nav-item').forEach(btn => {
   });
 });
 activateView(loadActiveView());
+
+// ---------- sidebar collapse ----------
+function loadSidebarCollapsed() {
+  return localStorage.getItem('sntSidebarCollapsed') !== '0'; // default collapsed unless user expanded it before
+}
+function persistSidebarCollapsed(collapsed) {
+  localStorage.setItem('sntSidebarCollapsed', collapsed ? '1' : '0');
+}
+if (loadSidebarCollapsed()) document.getElementById('sidebarEl').classList.add('collapsed');
+document.getElementById('sidebarCollapseBtn').addEventListener('click', () => {
+  const sidebarEl = document.getElementById('sidebarEl');
+  sidebarEl.classList.toggle('collapsed');
+  persistSidebarCollapsed(sidebarEl.classList.contains('collapsed'));
+});
 
 document.getElementById('hamburgerBtn').addEventListener('click', () => {
   document.querySelector('.sidebar').classList.toggle('open');
