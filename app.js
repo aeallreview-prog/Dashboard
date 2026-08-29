@@ -1161,4 +1161,35 @@ function initApp() {
   loadRevenueHistory();
   startPolling();
 }
-initApp();
+// ---------- login gate ----------
+const LOGIN_PASSWORD = 'snt';
+
+function isAlreadyLoggedIn() {
+  return sessionStorage.getItem('sntLoggedIn') === '1';
+}
+function markLoggedIn() {
+  sessionStorage.setItem('sntLoggedIn', '1');
+}
+
+function attemptLogin() {
+  const passVal = document.getElementById('loginPass').value;
+  const errEl = document.getElementById('loginError');
+  if (passVal === LOGIN_PASSWORD) {
+    markLoggedIn();
+    document.getElementById('loginBackdrop').style.display = 'none';
+    document.getElementById('mainShell').style.display = '';
+    activateView('search');
+    persistActiveView('search');
+    initApp();
+  } else {
+    errEl.textContent = 'รหัสผ่านไม่ถูกต้อง';
+  }
+}
+document.getElementById('loginBtn').addEventListener('click', attemptLogin);
+document.getElementById('loginPass').addEventListener('keydown', (e) => { if (e.key === 'Enter') attemptLogin(); });
+
+if (isAlreadyLoggedIn()) {
+  document.getElementById('loginBackdrop').style.display = 'none';
+  document.getElementById('mainShell').style.display = '';
+  initApp();
+}

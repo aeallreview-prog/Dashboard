@@ -10,7 +10,21 @@
 </head>
 <body>
 
-<div class="shell">
+<div class="login-backdrop" id="loginBackdrop">
+  <div class="login-card">
+    <img src="logo.png" alt="seek n tique" class="login-logo">
+    <h2>เข้าสู่ระบบ</h2>
+    <p>กรอกรหัสผ่านเพื่อเข้าใช้งานแดชบอร์ด</p>
+    <div class="field">
+      <label>รหัสผ่าน</label>
+      <input id="loginPass" type="password" autocomplete="current-password">
+    </div>
+    <p class="login-error" id="loginError"></p>
+    <button id="loginBtn">เข้าสู่ระบบ</button>
+  </div>
+</div>
+
+<div class="shell" style="display:none;" id="mainShell">
   <button class="hamburger-btn" id="hamburgerBtn">☰</button>
   <aside class="sidebar" id="sidebarEl">
     <div class="sidebar-brand">
