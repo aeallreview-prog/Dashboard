@@ -23,6 +23,7 @@ const DEFAULTS = {
   sheetName: '',
   statusCol: 'auto',
   interval: 60,
+  webAppUrl: '',
 };
 
 // NOTE: browser storage (localStorage/sessionStorage) is not available inside
@@ -286,7 +287,10 @@ function renderSearchResult(row) {
 
   return `
     <div class="search-result-card">
-      <div class="search-result-head"><strong>No. ${noVal}</strong></div>
+      <div class="search-result-head">
+        <strong>No. ${noVal}</strong>
+        <button class="btn-edit" onclick="event.stopPropagation(); openEditProductModal('${escapeHtml(noVal)}')">แก้ไข</button>
+      </div>
       <div class="search-fields">${fields}</div>
     </div>
   `;
@@ -586,6 +590,7 @@ function openSettings() {
   document.getElementById('cfgSheetName').value = config.sheetName;
   document.getElementById('cfgStatusCol').value = config.statusCol;
   document.getElementById('cfgInterval').value = config.interval;
+  document.getElementById('cfgWebAppUrl').value = config.webAppUrl;
   document.getElementById('settingsBackdrop').classList.add('open');
 }
 function closeSettings() {
@@ -809,6 +814,7 @@ document.getElementById('settingsSave').addEventListener('click', () => {
     sheetName: document.getElementById('cfgSheetName').value.trim(),
     statusCol: document.getElementById('cfgStatusCol').value,
     interval: Number(document.getElementById('cfgInterval').value) || 60,
+    webAppUrl: document.getElementById('cfgWebAppUrl').value.trim(),
   };
   saveConfig(config);
   closeSettings();
@@ -1153,6 +1159,149 @@ function deleteTemplate(i) {
 document.getElementById('templateAddBtn').addEventListener('click', addTemplate);
 document.getElementById('templateInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addTemplate(); });
 renderTemplates();
+
+// ---------- write-back API (edit/add product, edit store finance) ----------
+async function callWriteApi(action, payload) {
+  if (!config.webAppUrl) {
+    throw new Error('ยังไม่ได้ตั้งค่า Web App URL — ไปที่ "ตั้งค่า" แล้ววาง URL จาก Apps Script ก่อน');
+  }
+  const res = await fetch(config.webAppUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids a CORS preflight Apps Script can't handle
+    body: JSON.stringify({ secret: LOGIN_PASSWORD, action, ...payload }),
+  });
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error || 'เขียนข้อมูลไม่สำเร็จ');
+  return data.result;
+}
+
+function populateStatusSelect(selectEl, currentVal) {
+  selectEl.innerHTML = STATUS_DEFS.map(def =>
+    `<option value="${def.label}" ${def.label === currentVal ? 'selected' : ''}>${def.label}</option>`
+  ).join('');
+}
+
+// ---------- edit / add product modal ----------
+let productFormMode = 'edit'; // 'edit' | 'add'
+let productFormNo = null;
+
+function openEditProductModal(noVal) {
+  const row = findRowByNo(noVal);
+  if (!row) return;
+  productFormMode = 'edit';
+  productFormNo = noVal;
+  document.getElementById('productFormTitle').textContent = `แก้ไขสินค้า No. ${noVal}`;
+  document.getElementById('productFormSubtitle').textContent = 'แก้เฉพาะช่องที่เปลี่ยน แล้วกดบันทึก';
+  document.getElementById('pfP').value = cellText(row.c && row.c[IMAGE_COL]);
+  document.getElementById('pfC').value = cellText(row.c && row.c[DETAIL_COL]);
+  document.getElementById('pfE').value = cellText(row.c && row.c[colToIndex('E')]);
+  document.getElementById('pfF').value = cellText(row.c && row.c[PRICE_COL]);
+  document.getElementById('pfH').value = cellText(row.c && row.c[colToIndex('H')]);
+  document.getElementById('pfI').value = cellText(row.c && row.c[colToIndex('I')]);
+  document.getElementById('pfJ').value = cellText(row.c && row.c[colToIndex('J')]);
+  document.getElementById('pfK').value = cellText(row.c && row.c[colToIndex('K')]);
+  populateStatusSelect(document.getElementById('pfO'), cellText(row.c && row.c[STATUS_DISPLAY_COL]));
+  document.getElementById('productFormError').textContent = '';
+  document.getElementById('productFormBackdrop').classList.add('open');
+}
+
+function openAddProductModal() {
+  productFormMode = 'add';
+  productFormNo = null;
+  document.getElementById('productFormTitle').textContent = 'เพิ่มสินค้าใหม่';
+  document.getElementById('productFormSubtitle').textContent = 'เลข No. จะถูกกำหนดให้อัตโนมัติต่อจากรายการล่าสุด';
+  ['pfP', 'pfC', 'pfE', 'pfF', 'pfH', 'pfI', 'pfJ', 'pfK'].forEach(id => { document.getElementById(id).value = ''; });
+  populateStatusSelect(document.getElementById('pfO'), 'ยังไม่ได้ลงขาย');
+  document.getElementById('productFormError').textContent = '';
+  document.getElementById('productFormBackdrop').classList.add('open');
+}
+
+function closeProductForm() {
+  document.getElementById('productFormBackdrop').classList.remove('open');
+}
+
+async function saveProductForm() {
+  const errEl = document.getElementById('productFormError');
+  errEl.textContent = '';
+  const fields = {
+    P: document.getElementById('pfP').value.trim(),
+    C: document.getElementById('pfC').value,
+    E: document.getElementById('pfE').value,
+    F: document.getElementById('pfF').value,
+    H: document.getElementById('pfH').value,
+    I: document.getElementById('pfI').value,
+    J: document.getElementById('pfJ').value,
+    K: document.getElementById('pfK').value,
+    O: document.getElementById('pfO').value,
+  };
+  const saveBtn = document.getElementById('productFormSave');
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'กำลังบันทึก...';
+  try {
+    if (productFormMode === 'edit') {
+      await callWriteApi('updateProduct', { no: productFormNo, fields });
+    } else {
+      await callWriteApi('addProduct', { fields });
+    }
+    closeProductForm();
+    await loadData();
+  } catch (err) {
+    errEl.textContent = err.message;
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'บันทึก';
+  }
+}
+
+document.getElementById('addProductBtn').addEventListener('click', openAddProductModal);
+document.getElementById('productFormCancel').addEventListener('click', closeProductForm);
+document.getElementById('productFormSave').addEventListener('click', saveProductForm);
+document.getElementById('productFormBackdrop').addEventListener('click', (e) => {
+  if (e.target.id === 'productFormBackdrop') closeProductForm();
+});
+
+// ---------- store finance modal ----------
+function openFinanceForm() {
+  const rowTwo = lastRows && lastRows[1];
+  document.getElementById('ffQ2').value = cellText(rowTwo && rowTwo.c && rowTwo.c[colToIndex('Q')]);
+  document.getElementById('ffR2').value = cellText(rowTwo && rowTwo.c && rowTwo.c[colToIndex('R')]);
+  document.getElementById('ffS2').value = cellText(rowTwo && rowTwo.c && rowTwo.c[colToIndex('S')]);
+  document.getElementById('financeFormError').textContent = '';
+  document.getElementById('financeFormBackdrop').classList.add('open');
+}
+function closeFinanceForm() {
+  document.getElementById('financeFormBackdrop').classList.remove('open');
+}
+async function saveFinanceForm() {
+  const errEl = document.getElementById('financeFormError');
+  errEl.textContent = '';
+  const fields = {};
+  const q2 = document.getElementById('ffQ2').value;
+  const r2 = document.getElementById('ffR2').value;
+  const s2 = document.getElementById('ffS2').value;
+  if (q2 !== '') fields.Q2 = q2;
+  if (r2 !== '') fields.R2 = r2;
+  if (s2 !== '') fields.S2 = s2;
+  const saveBtn = document.getElementById('financeFormSave');
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'กำลังบันทึก...';
+  try {
+    await callWriteApi('updateStoreFinance', { fields });
+    closeFinanceForm();
+    await loadData();
+  } catch (err) {
+    errEl.textContent = err.message;
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'บันทึก';
+  }
+}
+document.getElementById('editFinanceBtn').addEventListener('click', openFinanceForm);
+document.getElementById('financeFormCancel').addEventListener('click', closeFinanceForm);
+document.getElementById('financeFormSave').addEventListener('click', saveFinanceForm);
+document.getElementById('financeFormBackdrop').addEventListener('click', (e) => {
+  if (e.target.id === 'financeFormBackdrop') closeFinanceForm();
+});
 
 // ---------- init ----------
 function initApp() {

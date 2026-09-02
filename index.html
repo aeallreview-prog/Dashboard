@@ -83,6 +83,10 @@
       </div>
     </div>
 
+    <div class="finance-edit-row">
+      <button class="ghost" id="editFinanceBtn">แก้ไขรายรับ-รายจ่ายร้าน</button>
+    </div>
+
     <div class="panel-row">
       <div class="panel-col">
         <div class="panel">
@@ -167,6 +171,7 @@
           <h2>สินค้าทั้งหมด</h2>
         </div>
         <div class="table-filter">
+          <button id="addProductBtn" class="btn-yellow" style="font-size:12px;padding:8px 14px;">+ เพิ่มสินค้าใหม่</button>
           <label class="hide-sensitive-toggle">
             <input type="checkbox" id="hideSensitiveCheckbox" checked>
             ปิดข้อมูลสำคัญ
@@ -264,9 +269,53 @@
       <input id="cfgInterval" type="number" min="5" value="60">
     </div>
 
+    <div class="field">
+      <label>Web App URL (สำหรับแก้ไข/เพิ่มสินค้า)</label>
+      <input id="cfgWebAppUrl" type="text" placeholder="วาง URL จาก Apps Script Deploy ที่นี่">
+      <small>ได้มาจากการ Deploy Apps Script เป็น Web App (ดู README)</small>
+    </div>
+
     <div class="settings-actions">
       <button class="ghost" id="settingsCancel">ยกเลิก</button>
       <button id="settingsSave">บันทึก & โหลดใหม่</button>
+    </div>
+  </div>
+</div>
+
+<div class="settings-backdrop" id="productFormBackdrop">
+  <div class="settings-panel product-form-panel">
+    <h3 id="productFormTitle">แก้ไขสินค้า</h3>
+    <p id="productFormSubtitle" style="margin:0 0 16px;color:var(--muted);font-size:12px;"></p>
+
+    <div class="field"><label>รูปภาพ (URL)</label><input id="pfP" type="text"></div>
+    <div class="field"><label>รายละเอียด (Detail)</label><textarea id="pfC" rows="3" style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line);font:500 13px 'DM Sans',sans-serif;color:var(--ink);background:var(--paper);resize:vertical;"></textarea></div>
+    <div class="field"><label>ต้นทุนของ</label><input id="pfE" type="number"></div>
+    <div class="field"><label>ราคาขาย</label><input id="pfF" type="number"></div>
+    <div class="field"><label>ขายแล้ว</label><input id="pfH" type="text"></div>
+    <div class="field"><label>ค่าส่งจากลูกค้า</label><input id="pfI" type="number"></div>
+    <div class="field"><label>ค่าส่งจริง</label><input id="pfJ" type="number"></div>
+    <div class="field"><label>หมายเหตุ</label><textarea id="pfK" rows="2" style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line);font:500 13px 'DM Sans',sans-serif;color:var(--ink);background:var(--paper);resize:vertical;"></textarea></div>
+    <div class="field"><label>สถานะ</label><select id="pfO"></select></div>
+
+    <p class="login-error" id="productFormError"></p>
+    <div class="settings-actions">
+      <button class="ghost" id="productFormCancel">ยกเลิก</button>
+      <button id="productFormSave">บันทึก</button>
+    </div>
+  </div>
+</div>
+
+<div class="settings-backdrop" id="financeFormBackdrop">
+  <div class="settings-panel">
+    <h3>แก้ไขรายรับ-รายจ่ายร้าน</h3>
+    <p style="margin:0 0 16px;color:var(--muted);font-size:12px;">ค่าที่กรอกเองเพิ่มเติม (Q2/R2/S2) จะถูกรวมเข้ากับยอดรายจ่ายอัตโนมัติ</p>
+    <div class="field"><label>Q1</label><input id="ffQ2" type="number"></div>
+    <div class="field"><label>R1</label><input id="ffR2" type="number"></div>
+    <div class="field"><label>S1</label><input id="ffS2" type="number"></div>
+    <p class="login-error" id="financeFormError"></p>
+    <div class="settings-actions">
+      <button class="ghost" id="financeFormCancel">ยกเลิก</button>
+      <button id="financeFormSave">บันทึก</button>
     </div>
   </div>
 </div>

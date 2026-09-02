@@ -152,6 +152,8 @@ button.btn-red:hover { background: #b93b3b; }
 button:disabled { opacity: .55; cursor: wait; }
 
 .summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; padding: 6px 0 18px; }
+.finance-edit-row { display: flex; justify-content: flex-end; padding-bottom: 4px; }
+.finance-edit-row button { font-size: 12px; padding: 8px 14px; }
 .metric, .error-box { min-height: 152px; padding: 22px; background: #f8f9fa; border-radius: 18px; }
 .metric:nth-child(1) { background: linear-gradient(135deg, var(--blue), #1f7dc4); }
 .metric:nth-child(2) { background: #f8f9fa; }
@@ -255,6 +257,8 @@ button:disabled { opacity: .55; cursor: wait; }
   padding: 16px 20px; background: linear-gradient(135deg, var(--blue), #1f7dc4); color: #fff;
 }
 .search-result-head strong { font: 700 20px 'DM Sans', sans-serif; letter-spacing: -.03em; }
+.search-result-head .btn-edit { background: rgba(255,255,255,.2); color: #fff; font-size: 11px; padding: 7px 12px; flex: none; }
+.search-result-head .btn-edit:hover { background: rgba(255,255,255,.32); }
 .search-fields { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 1px; background: var(--line); scrollbar-width: thin; align-items: stretch; }
 .search-field {
   flex: 0 0 118px; padding: 12px 10px; background: var(--card);
@@ -482,6 +486,10 @@ button:disabled { opacity: .55; cursor: wait; }
       </div>
     </div>
 
+    <div class="finance-edit-row">
+      <button class="ghost" id="editFinanceBtn">แก้ไขรายรับ-รายจ่ายร้าน</button>
+    </div>
+
     <div class="panel-row">
       <div class="panel-col">
         <div class="panel">
@@ -566,6 +574,7 @@ button:disabled { opacity: .55; cursor: wait; }
           <h2>สินค้าทั้งหมด</h2>
         </div>
         <div class="table-filter">
+          <button id="addProductBtn" class="btn-yellow" style="font-size:12px;padding:8px 14px;">+ เพิ่มสินค้าใหม่</button>
           <label class="hide-sensitive-toggle">
             <input type="checkbox" id="hideSensitiveCheckbox" checked>
             ปิดข้อมูลสำคัญ
@@ -663,9 +672,53 @@ button:disabled { opacity: .55; cursor: wait; }
       <input id="cfgInterval" type="number" min="5" value="60">
     </div>
 
+    <div class="field">
+      <label>Web App URL (สำหรับแก้ไข/เพิ่มสินค้า)</label>
+      <input id="cfgWebAppUrl" type="text" placeholder="วาง URL จาก Apps Script Deploy ที่นี่">
+      <small>ได้มาจากการ Deploy Apps Script เป็น Web App (ดู README)</small>
+    </div>
+
     <div class="settings-actions">
       <button class="ghost" id="settingsCancel">ยกเลิก</button>
       <button id="settingsSave">บันทึก & โหลดใหม่</button>
+    </div>
+  </div>
+</div>
+
+<div class="settings-backdrop" id="productFormBackdrop">
+  <div class="settings-panel product-form-panel">
+    <h3 id="productFormTitle">แก้ไขสินค้า</h3>
+    <p id="productFormSubtitle" style="margin:0 0 16px;color:var(--muted);font-size:12px;"></p>
+
+    <div class="field"><label>รูปภาพ (URL)</label><input id="pfP" type="text"></div>
+    <div class="field"><label>รายละเอียด (Detail)</label><textarea id="pfC" rows="3" style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line);font:500 13px 'DM Sans',sans-serif;color:var(--ink);background:var(--paper);resize:vertical;"></textarea></div>
+    <div class="field"><label>ต้นทุนของ</label><input id="pfE" type="number"></div>
+    <div class="field"><label>ราคาขาย</label><input id="pfF" type="number"></div>
+    <div class="field"><label>ขายแล้ว</label><input id="pfH" type="text"></div>
+    <div class="field"><label>ค่าส่งจากลูกค้า</label><input id="pfI" type="number"></div>
+    <div class="field"><label>ค่าส่งจริง</label><input id="pfJ" type="number"></div>
+    <div class="field"><label>หมายเหตุ</label><textarea id="pfK" rows="2" style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line);font:500 13px 'DM Sans',sans-serif;color:var(--ink);background:var(--paper);resize:vertical;"></textarea></div>
+    <div class="field"><label>สถานะ</label><select id="pfO"></select></div>
+
+    <p class="login-error" id="productFormError"></p>
+    <div class="settings-actions">
+      <button class="ghost" id="productFormCancel">ยกเลิก</button>
+      <button id="productFormSave">บันทึก</button>
+    </div>
+  </div>
+</div>
+
+<div class="settings-backdrop" id="financeFormBackdrop">
+  <div class="settings-panel">
+    <h3>แก้ไขรายรับ-รายจ่ายร้าน</h3>
+    <p style="margin:0 0 16px;color:var(--muted);font-size:12px;">ค่าที่กรอกเองเพิ่มเติม (Q2/R2/S2) จะถูกรวมเข้ากับยอดรายจ่ายอัตโนมัติ</p>
+    <div class="field"><label>Q1</label><input id="ffQ2" type="number"></div>
+    <div class="field"><label>R1</label><input id="ffR2" type="number"></div>
+    <div class="field"><label>S1</label><input id="ffS2" type="number"></div>
+    <p class="login-error" id="financeFormError"></p>
+    <div class="settings-actions">
+      <button class="ghost" id="financeFormCancel">ยกเลิก</button>
+      <button id="financeFormSave">บันทึก</button>
     </div>
   </div>
 </div>
@@ -696,6 +749,7 @@ const DEFAULTS = {
   sheetName: '',
   statusCol: 'auto',
   interval: 60,
+  webAppUrl: '',
 };
 
 // NOTE: browser storage (localStorage/sessionStorage) is not available inside
@@ -956,7 +1010,10 @@ function renderSearchResult(row) {
 
   return `
     <div class="search-result-card">
-      <div class="search-result-head"><strong>No. ${noVal}</strong></div>
+      <div class="search-result-head">
+        <strong>No. ${noVal}</strong>
+        <button class="btn-edit" onclick="event.stopPropagation(); openEditProductModal('${escapeHtml(noVal)}')">แก้ไข</button>
+      </div>
       <div class="search-fields">${fields}</div>
     </div>
   `;
@@ -1256,6 +1313,7 @@ function openSettings() {
   document.getElementById('cfgSheetName').value = config.sheetName;
   document.getElementById('cfgStatusCol').value = config.statusCol;
   document.getElementById('cfgInterval').value = config.interval;
+  document.getElementById('cfgWebAppUrl').value = config.webAppUrl;
   document.getElementById('settingsBackdrop').classList.add('open');
 }
 function closeSettings() {
@@ -1479,6 +1537,7 @@ document.getElementById('settingsSave').addEventListener('click', () => {
     sheetName: document.getElementById('cfgSheetName').value.trim(),
     statusCol: document.getElementById('cfgStatusCol').value,
     interval: Number(document.getElementById('cfgInterval').value) || 60,
+    webAppUrl: document.getElementById('cfgWebAppUrl').value.trim(),
   };
   saveConfig(config);
   closeSettings();
@@ -1823,6 +1882,149 @@ function deleteTemplate(i) {
 document.getElementById('templateAddBtn').addEventListener('click', addTemplate);
 document.getElementById('templateInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addTemplate(); });
 renderTemplates();
+
+// ---------- write-back API (edit/add product, edit store finance) ----------
+async function callWriteApi(action, payload) {
+  if (!config.webAppUrl) {
+    throw new Error('ยังไม่ได้ตั้งค่า Web App URL — ไปที่ "ตั้งค่า" แล้ววาง URL จาก Apps Script ก่อน');
+  }
+  const res = await fetch(config.webAppUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids a CORS preflight Apps Script can't handle
+    body: JSON.stringify({ secret: LOGIN_PASSWORD, action, ...payload }),
+  });
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error || 'เขียนข้อมูลไม่สำเร็จ');
+  return data.result;
+}
+
+function populateStatusSelect(selectEl, currentVal) {
+  selectEl.innerHTML = STATUS_DEFS.map(def =>
+    `<option value="${def.label}" ${def.label === currentVal ? 'selected' : ''}>${def.label}</option>`
+  ).join('');
+}
+
+// ---------- edit / add product modal ----------
+let productFormMode = 'edit'; // 'edit' | 'add'
+let productFormNo = null;
+
+function openEditProductModal(noVal) {
+  const row = findRowByNo(noVal);
+  if (!row) return;
+  productFormMode = 'edit';
+  productFormNo = noVal;
+  document.getElementById('productFormTitle').textContent = `แก้ไขสินค้า No. ${noVal}`;
+  document.getElementById('productFormSubtitle').textContent = 'แก้เฉพาะช่องที่เปลี่ยน แล้วกดบันทึก';
+  document.getElementById('pfP').value = cellText(row.c && row.c[IMAGE_COL]);
+  document.getElementById('pfC').value = cellText(row.c && row.c[DETAIL_COL]);
+  document.getElementById('pfE').value = cellText(row.c && row.c[colToIndex('E')]);
+  document.getElementById('pfF').value = cellText(row.c && row.c[PRICE_COL]);
+  document.getElementById('pfH').value = cellText(row.c && row.c[colToIndex('H')]);
+  document.getElementById('pfI').value = cellText(row.c && row.c[colToIndex('I')]);
+  document.getElementById('pfJ').value = cellText(row.c && row.c[colToIndex('J')]);
+  document.getElementById('pfK').value = cellText(row.c && row.c[colToIndex('K')]);
+  populateStatusSelect(document.getElementById('pfO'), cellText(row.c && row.c[STATUS_DISPLAY_COL]));
+  document.getElementById('productFormError').textContent = '';
+  document.getElementById('productFormBackdrop').classList.add('open');
+}
+
+function openAddProductModal() {
+  productFormMode = 'add';
+  productFormNo = null;
+  document.getElementById('productFormTitle').textContent = 'เพิ่มสินค้าใหม่';
+  document.getElementById('productFormSubtitle').textContent = 'เลข No. จะถูกกำหนดให้อัตโนมัติต่อจากรายการล่าสุด';
+  ['pfP', 'pfC', 'pfE', 'pfF', 'pfH', 'pfI', 'pfJ', 'pfK'].forEach(id => { document.getElementById(id).value = ''; });
+  populateStatusSelect(document.getElementById('pfO'), 'ยังไม่ได้ลงขาย');
+  document.getElementById('productFormError').textContent = '';
+  document.getElementById('productFormBackdrop').classList.add('open');
+}
+
+function closeProductForm() {
+  document.getElementById('productFormBackdrop').classList.remove('open');
+}
+
+async function saveProductForm() {
+  const errEl = document.getElementById('productFormError');
+  errEl.textContent = '';
+  const fields = {
+    P: document.getElementById('pfP').value.trim(),
+    C: document.getElementById('pfC').value,
+    E: document.getElementById('pfE').value,
+    F: document.getElementById('pfF').value,
+    H: document.getElementById('pfH').value,
+    I: document.getElementById('pfI').value,
+    J: document.getElementById('pfJ').value,
+    K: document.getElementById('pfK').value,
+    O: document.getElementById('pfO').value,
+  };
+  const saveBtn = document.getElementById('productFormSave');
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'กำลังบันทึก...';
+  try {
+    if (productFormMode === 'edit') {
+      await callWriteApi('updateProduct', { no: productFormNo, fields });
+    } else {
+      await callWriteApi('addProduct', { fields });
+    }
+    closeProductForm();
+    await loadData();
+  } catch (err) {
+    errEl.textContent = err.message;
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'บันทึก';
+  }
+}
+
+document.getElementById('addProductBtn').addEventListener('click', openAddProductModal);
+document.getElementById('productFormCancel').addEventListener('click', closeProductForm);
+document.getElementById('productFormSave').addEventListener('click', saveProductForm);
+document.getElementById('productFormBackdrop').addEventListener('click', (e) => {
+  if (e.target.id === 'productFormBackdrop') closeProductForm();
+});
+
+// ---------- store finance modal ----------
+function openFinanceForm() {
+  const rowTwo = lastRows && lastRows[1];
+  document.getElementById('ffQ2').value = cellText(rowTwo && rowTwo.c && rowTwo.c[colToIndex('Q')]);
+  document.getElementById('ffR2').value = cellText(rowTwo && rowTwo.c && rowTwo.c[colToIndex('R')]);
+  document.getElementById('ffS2').value = cellText(rowTwo && rowTwo.c && rowTwo.c[colToIndex('S')]);
+  document.getElementById('financeFormError').textContent = '';
+  document.getElementById('financeFormBackdrop').classList.add('open');
+}
+function closeFinanceForm() {
+  document.getElementById('financeFormBackdrop').classList.remove('open');
+}
+async function saveFinanceForm() {
+  const errEl = document.getElementById('financeFormError');
+  errEl.textContent = '';
+  const fields = {};
+  const q2 = document.getElementById('ffQ2').value;
+  const r2 = document.getElementById('ffR2').value;
+  const s2 = document.getElementById('ffS2').value;
+  if (q2 !== '') fields.Q2 = q2;
+  if (r2 !== '') fields.R2 = r2;
+  if (s2 !== '') fields.S2 = s2;
+  const saveBtn = document.getElementById('financeFormSave');
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'กำลังบันทึก...';
+  try {
+    await callWriteApi('updateStoreFinance', { fields });
+    closeFinanceForm();
+    await loadData();
+  } catch (err) {
+    errEl.textContent = err.message;
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'บันทึก';
+  }
+}
+document.getElementById('editFinanceBtn').addEventListener('click', openFinanceForm);
+document.getElementById('financeFormCancel').addEventListener('click', closeFinanceForm);
+document.getElementById('financeFormSave').addEventListener('click', saveFinanceForm);
+document.getElementById('financeFormBackdrop').addEventListener('click', (e) => {
+  if (e.target.id === 'financeFormBackdrop') closeFinanceForm();
+});
 
 // ---------- init ----------
 function initApp() {
