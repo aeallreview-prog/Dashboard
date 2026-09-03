@@ -257,6 +257,21 @@ function handleImgError(imgEl) {
   imgEl.replaceWith(fallback);
 }
 
+let detailCopyTexts = []; // reset before each render batch; index referenced by copy buttons
+
+function registerDetailCopyText(text) {
+  detailCopyTexts.push(text || '');
+  return detailCopyTexts.length - 1;
+}
+
+function copyDetailText(idx, btn) {
+  navigator.clipboard.writeText(detailCopyTexts[idx] || '').then(() => {
+    const original = btn.textContent;
+    btn.textContent = '✓';
+    setTimeout(() => { btn.textContent = original; }, 1000);
+  });
+}
+
 function renderSearchResult(row) {
   const noVal = cellText(row.c && row.c[0]) || '-';
   let fields = '';
@@ -273,7 +288,11 @@ function renderSearchResult(row) {
         fields += `<div class="search-field image-field"><p>${headerLabel(i)}</p><strong>-</strong></div>`;
       }
     } else if (i === DETAIL_COL) {
-      fields += `<div class="search-field detail-field"><p>${headerLabel(i)}</p><strong>${text}</strong></div>`;
+      const copyIdx = registerDetailCopyText(rawText);
+      fields += `<div class="search-field detail-field">
+        <div class="detail-field-head"><p>${headerLabel(i)}</p><button class="detail-copy-btn" onclick="copyDetailText(${copyIdx}, this)" title="คัดลอก">⧉</button></div>
+        <strong>${text}</strong>
+      </div>`;
     } else if (i === PRICE_COL) {
       fields += `<div class="search-field price-field"><p>${headerLabel(i)}</p><strong>${text}</strong></div>`;
     } else if (i === STATUS_DISPLAY_COL) {
@@ -314,6 +333,7 @@ function doSearch() {
     box.innerHTML = '<p class="search-empty">ยังไม่มีข้อมูล กรุณารอให้โหลดข้อมูลก่อน</p>';
     return;
   }
+  detailCopyTexts = [];
 
   let tokens = raw.split(',').map(s => s.trim()).filter(Boolean);
   let notice = '';
@@ -481,6 +501,7 @@ function renderProductTable() {
   populateStatusFilterOptions();
   renderProductTableHead();
   const tbody = document.getElementById('productTableBody');
+  detailCopyTexts = [];
 
   if (!lastRows) {
     tbody.innerHTML = `<tr><td colspan="${getVisibleCols().length}">กำลังโหลดข้อมูล...</td></tr>`;
@@ -1185,6 +1206,56 @@ function populateStatusSelect(selectEl, currentVal) {
 let productFormMode = 'edit'; // 'edit' | 'add'
 let productFormNo = null;
 
+const DEFAULT_CLOSING_NOTE = `สินค้าเป็นของสะสม อาจมีร่องรอยตามกาลเวลา โดยทางเราได้ลงภาพรายละเอียดไว้ในอัลบั้มข้างต้น
+#artglass #แก้ว #เครื่องครัวญี่ปุ่น #ของมือสองญี่ปุ่น #ของมือสอง`;
+
+function computeNextProductNo() {
+  return getAllProductRows().length + 1;
+}
+
+function resetTemplateBuilder() {
+  document.getElementById('tplTitle').value = '';
+  document.getElementById('tplWidth').value = '';
+  document.getElementById('tplHeight').value = '';
+  document.getElementById('tplLength').value = '';
+  document.getElementById('tplIncludeLength').checked = false;
+  document.getElementById('tplLengthField').style.display = 'none';
+  document.getElementById('tplPrice').value = '';
+  document.getElementById('tplClosing').value = DEFAULT_CLOSING_NOTE;
+}
+
+document.getElementById('tplIncludeLength').addEventListener('change', (e) => {
+  document.getElementById('tplLengthField').style.display = e.target.checked ? '' : 'none';
+});
+
+function assembleDetailTemplate() {
+  const no = productFormMode === 'add' ? computeNextProductNo() : productFormNo;
+  const title = document.getElementById('tplTitle').value.trim();
+  const width = document.getElementById('tplWidth').value.trim();
+  const includeLength = document.getElementById('tplIncludeLength').checked;
+  const length = document.getElementById('tplLength').value.trim();
+  const height = document.getElementById('tplHeight').value.trim();
+  const price = document.getElementById('tplPrice').value.trim();
+  const closing = document.getElementById('tplClosing').value.trim();
+
+  let sizeLine = `ขนาด : กว้าง ${width || '.....'} cm.`;
+  if (includeLength) sizeLine += ` , ยาว ${length || '.....'} cm.`;
+  sizeLine += ` , สูง ${height || '.....'} cm.`;
+
+  const lines = [
+    `No.${no !== null && no !== undefined ? no : '...'} ${title || '..........................................................................'}`,
+    '--------------------',
+    sizeLine,
+    '--------------------',
+    `ราคา : ${price || '.......'} บาท`,
+    '(ราคายังไม่รวมค่าจัดส่ง)',
+    '--------------------',
+    closing || DEFAULT_CLOSING_NOTE,
+  ];
+  document.getElementById('pfC').value = lines.join('\n');
+}
+document.getElementById('tplGenerateBtn').addEventListener('click', assembleDetailTemplate);
+
 function openEditProductModal(noVal) {
   const row = findRowByNo(noVal);
   if (!row) return;
@@ -1193,6 +1264,7 @@ function openEditProductModal(noVal) {
   document.getElementById('productFormTitle').textContent = `แก้ไขสินค้า No. ${noVal}`;
   document.getElementById('productFormSubtitle').textContent = 'แก้เฉพาะช่องที่เปลี่ยน แล้วกดบันทึก';
   document.getElementById('pfP').value = cellText(row.c && row.c[IMAGE_COL]);
+  resetTemplateBuilder();
   document.getElementById('pfC').value = cellText(row.c && row.c[DETAIL_COL]);
   document.getElementById('pfE').value = cellText(row.c && row.c[colToIndex('E')]);
   document.getElementById('pfF').value = cellText(row.c && row.c[PRICE_COL]);
@@ -1209,8 +1281,10 @@ function openAddProductModal() {
   productFormMode = 'add';
   productFormNo = null;
   document.getElementById('productFormTitle').textContent = 'เพิ่มสินค้าใหม่';
-  document.getElementById('productFormSubtitle').textContent = 'เลข No. จะถูกกำหนดให้อัตโนมัติต่อจากรายการล่าสุด';
-  ['pfP', 'pfC', 'pfE', 'pfF', 'pfH', 'pfI', 'pfJ', 'pfK'].forEach(id => { document.getElementById(id).value = ''; });
+  document.getElementById('productFormSubtitle').textContent = `เลข No. จะถูกกำหนดให้อัตโนมัติเป็น No.${computeNextProductNo()}`;
+  ['pfP', 'pfE', 'pfF', 'pfH', 'pfI', 'pfJ', 'pfK'].forEach(id => { document.getElementById(id).value = ''; });
+  resetTemplateBuilder();
+  document.getElementById('pfC').value = '';
   populateStatusSelect(document.getElementById('pfO'), 'ยังไม่ได้ลงขาย');
   document.getElementById('productFormError').textContent = '';
   document.getElementById('productFormBackdrop').classList.add('open');
@@ -1256,9 +1330,9 @@ async function saveProductForm() {
 document.getElementById('addProductBtn').addEventListener('click', openAddProductModal);
 document.getElementById('productFormCancel').addEventListener('click', closeProductForm);
 document.getElementById('productFormSave').addEventListener('click', saveProductForm);
-document.getElementById('productFormBackdrop').addEventListener('click', (e) => {
-  if (e.target.id === 'productFormBackdrop') closeProductForm();
-});
+// no click-outside-to-close here on purpose — with a long form + textarea, mobile
+// keyboard resizing can misfire a click on the backdrop and lose unsaved edits.
+// Use the "ยกเลิก" button instead.
 
 // ---------- store finance modal ----------
 function openFinanceForm() {

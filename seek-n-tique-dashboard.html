@@ -270,6 +270,14 @@ button:disabled { opacity: .55; cursor: wait; }
 .search-field.image-field img { width: 100%; height: 90px; object-fit: cover; border-radius: 10px; background: var(--paper); margin: auto 0; }
 .search-field.image-field strong { margin: auto 0; font: 700 16px 'DM Sans', sans-serif; }
 .search-field.detail-field { flex: 0 0 320px; padding: 12px 18px; align-items: flex-start; text-align: left; }
+.detail-field-head { display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 8px; }
+.detail-field-head p { margin: 0; }
+.detail-copy-btn {
+  flex: none; width: 22px; height: 22px; padding: 0; border-radius: 7px;
+  background: var(--line); color: var(--muted); font-size: 12px;
+  display: flex; align-items: center; justify-content: center;
+}
+.detail-copy-btn:hover { background: var(--blue); color: #fff; }
 .search-field.detail-field p { align-self: flex-start; }
 .search-field.detail-field strong { font: 500 13px 'DM Sans', sans-serif; line-height: 1.5; white-space: pre-wrap; margin: 0; text-align: left; }
 .search-field.price-field { background: #1f9d63; }
@@ -283,6 +291,11 @@ button:disabled { opacity: .55; cursor: wait; }
 .table-filter { display: flex; align-items: center; gap: 14px; flex: none; flex-wrap: wrap; }
 .table-filter label { font-size: 12px; color: var(--muted); white-space: nowrap; }
 .hide-sensitive-toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+
+/* Detail template builder (product form) */
+.detail-template-builder { background: var(--paper); border-radius: 14px; padding: 16px 16px 4px; margin-bottom: 16px; }
+.detail-template-builder-title { margin: 0 0 12px; font: 700 12px 'DM Sans', sans-serif; color: var(--blue); text-transform: uppercase; letter-spacing: .03em; }
+.tpl-size-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .hide-sensitive-toggle input { width: 15px; height: 15px; accent-color: var(--blue); cursor: pointer; }
 .table-filter select {
   padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line);
@@ -301,8 +314,10 @@ button:disabled { opacity: .55; cursor: wait; }
 .product-table tr.product-row:hover td.price-cell-highlight { background: #dcf5e3; }
 .detail-cell-truncate { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .price-cell-highlight { background: #eafaf0; font-weight: 600; color: #16794a; }
-.product-row-expanded td { padding: 0; background: var(--paper); cursor: default; }
-.product-row-expanded .search-result-card { margin: 14px; }
+.product-row-expanded { white-space: normal; }
+.product-row-expanded td { display: block; width: 100%; max-width: 0; padding: 0; background: var(--paper); cursor: default; }
+.product-row-expanded .search-result-card { margin: 14px; max-width: none; }
+.product-row-expanded .search-fields { overflow-x: auto; }
 .product-table img { width: 40px; height: 40px; object-fit: cover; border-radius: 8px; background: var(--paper); vertical-align: middle; }
 .product-table .status-pill { display: inline-block; padding: 3px 10px; border-radius: 999px; color: #fff; font: 600 11px 'DM Sans', sans-serif; }
 .pagination { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 16px 24px 24px; flex-wrap: wrap; }
@@ -344,10 +359,14 @@ button:disabled { opacity: .55; cursor: wait; }
 /* Settings panel */
 .settings-backdrop {
   position: fixed; inset: 0; background: rgba(17, 38, 58, .45);
-  display: none; align-items: center; justify-content: center; z-index: 50; padding: 20px;
+  display: none; align-items: flex-start; justify-content: center; z-index: 50; padding: 20px;
+  overflow-y: auto;
 }
 .settings-backdrop.open { display: flex; }
-.settings-panel { width: min(420px, 100%); background: var(--card); border-radius: 20px; padding: 26px; box-shadow: 0 30px 70px rgba(0,0,0,.3); }
+.settings-panel {
+  width: min(420px, 100%); background: var(--card); border-radius: 20px; padding: 26px;
+  box-shadow: 0 30px 70px rgba(0,0,0,.3); margin: 20px auto; max-height: calc(100vh - 40px); overflow-y: auto;
+}
 .settings-panel h3 { margin: 0 0 4px; font: 700 19px 'DM Sans', sans-serif; letter-spacing: -.03em; }
 .settings-panel > p { margin: 0 0 18px; color: var(--muted); font-size: 12px; }
 .field { margin-bottom: 14px; }
@@ -691,7 +710,25 @@ button:disabled { opacity: .55; cursor: wait; }
     <p id="productFormSubtitle" style="margin:0 0 16px;color:var(--muted);font-size:12px;"></p>
 
     <div class="field"><label>รูปภาพ (URL)</label><input id="pfP" type="text"></div>
-    <div class="field"><label>รายละเอียด (Detail)</label><textarea id="pfC" rows="3" style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line);font:500 13px 'DM Sans',sans-serif;color:var(--ink);background:var(--paper);resize:vertical;"></textarea></div>
+
+    <div class="detail-template-builder">
+      <p class="detail-template-builder-title">ตัวช่วยสร้างข้อความ Detail</p>
+      <div class="field"><label>ชื่อสินค้า</label><input id="tplTitle" type="text" placeholder="พิมพ์ชื่อ/คำอธิบายสินค้า"></div>
+      <div class="tpl-size-row">
+        <div class="field"><label>กว้าง (cm.)</label><input id="tplWidth" type="number"></div>
+        <div class="field"><label>สูง (cm.)</label><input id="tplHeight" type="number"></div>
+      </div>
+      <label class="hide-sensitive-toggle" style="margin-bottom:12px;">
+        <input type="checkbox" id="tplIncludeLength">
+        ระบุความยาว (ยาว)
+      </label>
+      <div class="field" id="tplLengthField" style="display:none;"><label>ยาว (cm.)</label><input id="tplLength" type="number"></div>
+      <div class="field"><label>ราคา (บาท)</label><input id="tplPrice" type="number"></div>
+      <div class="field"><label>ข้อความปิดท้าย/แฮชแท็ก</label><textarea id="tplClosing" rows="3" style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line);font:500 13px 'DM Sans',sans-serif;color:var(--ink);background:var(--card);resize:vertical;"></textarea></div>
+      <button type="button" class="btn-yellow" id="tplGenerateBtn" style="width:100%;justify-content:center;">สร้างข้อความอัตโนมัติ ↓</button>
+    </div>
+
+    <div class="field"><label>รายละเอียด (Detail)</label><textarea id="pfC" rows="7" style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line);font:500 13px 'DM Sans',sans-serif;color:var(--ink);background:var(--paper);resize:vertical;"></textarea></div>
     <div class="field"><label>ต้นทุนของ</label><input id="pfE" type="number"></div>
     <div class="field"><label>ราคาขาย</label><input id="pfF" type="number"></div>
     <div class="field"><label>ขายแล้ว</label><input id="pfH" type="text"></div>
@@ -980,6 +1017,21 @@ function handleImgError(imgEl) {
   imgEl.replaceWith(fallback);
 }
 
+let detailCopyTexts = []; // reset before each render batch; index referenced by copy buttons
+
+function registerDetailCopyText(text) {
+  detailCopyTexts.push(text || '');
+  return detailCopyTexts.length - 1;
+}
+
+function copyDetailText(idx, btn) {
+  navigator.clipboard.writeText(detailCopyTexts[idx] || '').then(() => {
+    const original = btn.textContent;
+    btn.textContent = '✓';
+    setTimeout(() => { btn.textContent = original; }, 1000);
+  });
+}
+
 function renderSearchResult(row) {
   const noVal = cellText(row.c && row.c[0]) || '-';
   let fields = '';
@@ -996,7 +1048,11 @@ function renderSearchResult(row) {
         fields += `<div class="search-field image-field"><p>${headerLabel(i)}</p><strong>-</strong></div>`;
       }
     } else if (i === DETAIL_COL) {
-      fields += `<div class="search-field detail-field"><p>${headerLabel(i)}</p><strong>${text}</strong></div>`;
+      const copyIdx = registerDetailCopyText(rawText);
+      fields += `<div class="search-field detail-field">
+        <div class="detail-field-head"><p>${headerLabel(i)}</p><button class="detail-copy-btn" onclick="copyDetailText(${copyIdx}, this)" title="คัดลอก">⧉</button></div>
+        <strong>${text}</strong>
+      </div>`;
     } else if (i === PRICE_COL) {
       fields += `<div class="search-field price-field"><p>${headerLabel(i)}</p><strong>${text}</strong></div>`;
     } else if (i === STATUS_DISPLAY_COL) {
@@ -1037,6 +1093,7 @@ function doSearch() {
     box.innerHTML = '<p class="search-empty">ยังไม่มีข้อมูล กรุณารอให้โหลดข้อมูลก่อน</p>';
     return;
   }
+  detailCopyTexts = [];
 
   let tokens = raw.split(',').map(s => s.trim()).filter(Boolean);
   let notice = '';
@@ -1204,6 +1261,7 @@ function renderProductTable() {
   populateStatusFilterOptions();
   renderProductTableHead();
   const tbody = document.getElementById('productTableBody');
+  detailCopyTexts = [];
 
   if (!lastRows) {
     tbody.innerHTML = `<tr><td colspan="${getVisibleCols().length}">กำลังโหลดข้อมูล...</td></tr>`;
@@ -1908,6 +1966,56 @@ function populateStatusSelect(selectEl, currentVal) {
 let productFormMode = 'edit'; // 'edit' | 'add'
 let productFormNo = null;
 
+const DEFAULT_CLOSING_NOTE = `สินค้าเป็นของสะสม อาจมีร่องรอยตามกาลเวลา โดยทางเราได้ลงภาพรายละเอียดไว้ในอัลบั้มข้างต้น
+#artglass #แก้ว #เครื่องครัวญี่ปุ่น #ของมือสองญี่ปุ่น #ของมือสอง`;
+
+function computeNextProductNo() {
+  return getAllProductRows().length + 1;
+}
+
+function resetTemplateBuilder() {
+  document.getElementById('tplTitle').value = '';
+  document.getElementById('tplWidth').value = '';
+  document.getElementById('tplHeight').value = '';
+  document.getElementById('tplLength').value = '';
+  document.getElementById('tplIncludeLength').checked = false;
+  document.getElementById('tplLengthField').style.display = 'none';
+  document.getElementById('tplPrice').value = '';
+  document.getElementById('tplClosing').value = DEFAULT_CLOSING_NOTE;
+}
+
+document.getElementById('tplIncludeLength').addEventListener('change', (e) => {
+  document.getElementById('tplLengthField').style.display = e.target.checked ? '' : 'none';
+});
+
+function assembleDetailTemplate() {
+  const no = productFormMode === 'add' ? computeNextProductNo() : productFormNo;
+  const title = document.getElementById('tplTitle').value.trim();
+  const width = document.getElementById('tplWidth').value.trim();
+  const includeLength = document.getElementById('tplIncludeLength').checked;
+  const length = document.getElementById('tplLength').value.trim();
+  const height = document.getElementById('tplHeight').value.trim();
+  const price = document.getElementById('tplPrice').value.trim();
+  const closing = document.getElementById('tplClosing').value.trim();
+
+  let sizeLine = `ขนาด : กว้าง ${width || '.....'} cm.`;
+  if (includeLength) sizeLine += ` , ยาว ${length || '.....'} cm.`;
+  sizeLine += ` , สูง ${height || '.....'} cm.`;
+
+  const lines = [
+    `No.${no !== null && no !== undefined ? no : '...'} ${title || '..........................................................................'}`,
+    '--------------------',
+    sizeLine,
+    '--------------------',
+    `ราคา : ${price || '.......'} บาท`,
+    '(ราคายังไม่รวมค่าจัดส่ง)',
+    '--------------------',
+    closing || DEFAULT_CLOSING_NOTE,
+  ];
+  document.getElementById('pfC').value = lines.join('\n');
+}
+document.getElementById('tplGenerateBtn').addEventListener('click', assembleDetailTemplate);
+
 function openEditProductModal(noVal) {
   const row = findRowByNo(noVal);
   if (!row) return;
@@ -1916,6 +2024,7 @@ function openEditProductModal(noVal) {
   document.getElementById('productFormTitle').textContent = `แก้ไขสินค้า No. ${noVal}`;
   document.getElementById('productFormSubtitle').textContent = 'แก้เฉพาะช่องที่เปลี่ยน แล้วกดบันทึก';
   document.getElementById('pfP').value = cellText(row.c && row.c[IMAGE_COL]);
+  resetTemplateBuilder();
   document.getElementById('pfC').value = cellText(row.c && row.c[DETAIL_COL]);
   document.getElementById('pfE').value = cellText(row.c && row.c[colToIndex('E')]);
   document.getElementById('pfF').value = cellText(row.c && row.c[PRICE_COL]);
@@ -1932,8 +2041,10 @@ function openAddProductModal() {
   productFormMode = 'add';
   productFormNo = null;
   document.getElementById('productFormTitle').textContent = 'เพิ่มสินค้าใหม่';
-  document.getElementById('productFormSubtitle').textContent = 'เลข No. จะถูกกำหนดให้อัตโนมัติต่อจากรายการล่าสุด';
-  ['pfP', 'pfC', 'pfE', 'pfF', 'pfH', 'pfI', 'pfJ', 'pfK'].forEach(id => { document.getElementById(id).value = ''; });
+  document.getElementById('productFormSubtitle').textContent = `เลข No. จะถูกกำหนดให้อัตโนมัติเป็น No.${computeNextProductNo()}`;
+  ['pfP', 'pfE', 'pfF', 'pfH', 'pfI', 'pfJ', 'pfK'].forEach(id => { document.getElementById(id).value = ''; });
+  resetTemplateBuilder();
+  document.getElementById('pfC').value = '';
   populateStatusSelect(document.getElementById('pfO'), 'ยังไม่ได้ลงขาย');
   document.getElementById('productFormError').textContent = '';
   document.getElementById('productFormBackdrop').classList.add('open');
@@ -1979,9 +2090,9 @@ async function saveProductForm() {
 document.getElementById('addProductBtn').addEventListener('click', openAddProductModal);
 document.getElementById('productFormCancel').addEventListener('click', closeProductForm);
 document.getElementById('productFormSave').addEventListener('click', saveProductForm);
-document.getElementById('productFormBackdrop').addEventListener('click', (e) => {
-  if (e.target.id === 'productFormBackdrop') closeProductForm();
-});
+// no click-outside-to-close here on purpose — with a long form + textarea, mobile
+// keyboard resizing can misfire a click on the backdrop and lose unsaved edits.
+// Use the "ยกเลิก" button instead.
 
 // ---------- store finance modal ----------
 function openFinanceForm() {
