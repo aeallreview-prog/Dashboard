@@ -23,7 +23,7 @@ const DEFAULTS = {
   sheetName: '',
   statusCol: 'auto',
   interval: 60,
-  webAppUrl: '',
+  webAppUrl: 'https://script.google.com/macros/s/AKfycbzPilMpuyx3ubwjo7LnOwKNhRv6JArBkpJLJPWtYxh_nkGhGINTs-SXL90aiT_XJ2yZ/exec',
 };
 
 // NOTE: browser storage (localStorage/sessionStorage) is not available inside

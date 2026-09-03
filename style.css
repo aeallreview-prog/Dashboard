@@ -306,9 +306,9 @@ button:disabled { opacity: .55; cursor: wait; }
 .detail-cell-truncate { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .price-cell-highlight { background: #eafaf0; font-weight: 600; color: #16794a; }
 .product-row-expanded { white-space: normal; }
-.product-row-expanded td { display: block; width: 100%; max-width: 0; padding: 0; background: var(--paper); cursor: default; }
-.product-row-expanded .search-result-card { margin: 14px; max-width: none; }
-.product-row-expanded .search-fields { overflow-x: auto; }
+.product-row-expanded td { padding: 0; background: var(--paper); cursor: default; }
+.product-row-expanded .search-result-card { margin: 14px; }
+.product-row-expanded .search-fields { overflow-x: visible; }
 .product-table img { width: 40px; height: 40px; object-fit: cover; border-radius: 8px; background: var(--paper); vertical-align: middle; }
 .product-table .status-pill { display: inline-block; padding: 3px 10px; border-radius: 999px; color: #fff; font: 600 11px 'DM Sans', sans-serif; }
 .pagination { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 16px 24px 24px; flex-wrap: wrap; }
