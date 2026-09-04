@@ -1274,6 +1274,7 @@ function openEditProductModal(noVal) {
   document.getElementById('pfK').value = cellText(row.c && row.c[colToIndex('K')]);
   populateStatusSelect(document.getElementById('pfO'), cellText(row.c && row.c[STATUS_DISPLAY_COL]));
   document.getElementById('productFormError').textContent = '';
+  document.getElementById('productFormDelete').style.display = '';
   document.getElementById('productFormBackdrop').classList.add('open');
 }
 
@@ -1287,6 +1288,7 @@ function openAddProductModal() {
   document.getElementById('pfC').value = '';
   populateStatusSelect(document.getElementById('pfO'), 'ยังไม่ได้ลงขาย');
   document.getElementById('productFormError').textContent = '';
+  document.getElementById('productFormDelete').style.display = 'none';
   document.getElementById('productFormBackdrop').classList.add('open');
 }
 
@@ -1297,7 +1299,7 @@ function closeProductForm() {
 async function saveProductForm() {
   const errEl = document.getElementById('productFormError');
   errEl.textContent = '';
-  const fields = {
+  const rawFields = {
     P: document.getElementById('pfP').value.trim(),
     C: document.getElementById('pfC').value,
     E: document.getElementById('pfE').value,
@@ -1308,6 +1310,14 @@ async function saveProductForm() {
     K: document.getElementById('pfK').value,
     O: document.getElementById('pfO').value,
   };
+  // only send fields that actually have a value — an empty field means
+  // "leave this alone", not "erase whatever was there"
+  const fields = {};
+  Object.keys(rawFields).forEach(key => {
+    const val = rawFields[key];
+    if (val !== null && val !== undefined && String(val).trim() !== '') fields[key] = val;
+  });
+
   const saveBtn = document.getElementById('productFormSave');
   saveBtn.disabled = true;
   saveBtn.textContent = 'กำลังบันทึก...';
@@ -1327,9 +1337,31 @@ async function saveProductForm() {
   }
 }
 
+async function deleteProductFromForm() {
+  const errEl = document.getElementById('productFormError');
+  errEl.textContent = '';
+  const confirmed = confirm(`ยืนยันลบข้อมูลสินค้า No. ${productFormNo}?\nข้อมูลในแถวนี้จะถูกล้างทั้งหมด (กู้คืนไม่ได้)`);
+  if (!confirmed) return;
+
+  const deleteBtn = document.getElementById('productFormDelete');
+  deleteBtn.disabled = true;
+  deleteBtn.textContent = 'กำลังลบ...';
+  try {
+    await callWriteApi('deleteProduct', { no: productFormNo });
+    closeProductForm();
+    await loadData();
+  } catch (err) {
+    errEl.textContent = err.message;
+  } finally {
+    deleteBtn.disabled = false;
+    deleteBtn.textContent = 'ลบสินค้านี้';
+  }
+}
+
 document.getElementById('addProductBtn').addEventListener('click', openAddProductModal);
 document.getElementById('productFormCancel').addEventListener('click', closeProductForm);
 document.getElementById('productFormSave').addEventListener('click', saveProductForm);
+document.getElementById('productFormDelete').addEventListener('click', deleteProductFromForm);
 // no click-outside-to-close here on purpose — with a long form + textarea, mobile
 // keyboard resizing can misfire a click on the backdrop and lose unsaved edits.
 // Use the "ยกเลิก" button instead.

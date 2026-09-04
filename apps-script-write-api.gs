@@ -45,6 +45,8 @@ function doPost(e) {
       result = { no: newNo };
     } else if (body.action === 'updateStoreFinance') {
       updateStoreFinance(sheet, body.fields || {});
+    } else if (body.action === 'deleteProduct') {
+      deleteProductRow(sheet, body.no);
     } else {
       throw new Error('unknown action: ' + body.action);
     }
@@ -84,11 +86,26 @@ function updateProductRow(sheet, no, fields) {
   writeEditableFields(sheet, row, fields);
 }
 
-function addProductRow(sheet, fields) {
-  var newRow = sheet.getLastRow() + 1;
-  if (newRow < NO_FIRST_ROW) newRow = NO_FIRST_ROW;
+function findNextEmptyProductRow(sheet) {
+  var lastRow = sheet.getLastRow();
+  if (lastRow < NO_FIRST_ROW) return NO_FIRST_ROW;
+  // column E (index 5) marks whether a row "has" a product — search the whole
+  // pre-filled formula range for the first empty one instead of just appending
+  // after getLastRow(), which with formulas pre-filled hundreds of rows ahead
+  // would silently write far below where anyone would ever scroll to see it.
+  var values = sheet.getRange(NO_FIRST_ROW, 5, lastRow - NO_FIRST_ROW + 1, 1).getValues();
+  for (var i = 0; i < values.length; i++) {
+    if (values[i][0] === '' || values[i][0] === null) {
+      return NO_FIRST_ROW + i;
+    }
+  }
+  return lastRow + 1; // no empty slot found anywhere — append a genuinely new row
+}
 
-  // formula columns — set once here, then they behave exactly like the rest of the sheet
+function addProductRow(sheet, fields) {
+  var newRow = findNextEmptyProductRow(sheet);
+
+  // formula columns — safe to (re)set even if already pre-filled
   sheet.getRange(newRow, 1).setFormula('=ROW()-2');                                            // A: No.
   sheet.getRange(newRow, 7).setFormula('=SUM(F' + newRow + '-E' + newRow + ')');                // G: กำไรของ
   sheet.getRange(newRow, 12).setFormula('=SUM(H' + newRow + '+I' + newRow + '-E' + newRow + '-J' + newRow + ')'); // L: กำไรของ
@@ -101,4 +118,14 @@ function updateStoreFinance(sheet, fields) {
   if (fields.Q2 !== undefined) sheet.getRange('Q2').setValue(fields.Q2);
   if (fields.R2 !== undefined) sheet.getRange('R2').setValue(fields.R2);
   if (fields.S2 !== undefined) sheet.getRange('S2').setValue(fields.S2);
+}
+
+function deleteProductRow(sheet, no) {
+  var row = findRowByNo(sheet, no);
+  if (!row) throw new Error('ไม่พบสินค้า No. ' + no);
+  // clear only the editable fields — formula columns (A/G/L) are left alone so
+  // other items' No. never shift, and this row becomes reusable by "add new product"
+  Object.keys(EDITABLE_COLS).forEach(function (key) {
+    sheet.getRange(row, EDITABLE_COLS[key]).setValue('');
+  });
 }
