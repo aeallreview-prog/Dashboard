@@ -22,7 +22,7 @@ const DEFAULTS = {
   sheetId: '1uWbyx7ojEQ5iZpY6XSlk2xFiAko5bdVcsjjyMg4_OJg',
   sheetName: '',
   statusCol: 'auto',
-  interval: 60,
+  interval: 1800,
   webAppUrl: 'https://script.google.com/macros/s/AKfycbzPilMpuyx3ubwjo7LnOwKNhRv6JArBkpJLJPWtYxh_nkGhGINTs-SXL90aiT_XJ2yZ/exec',
 };
 
@@ -294,6 +294,22 @@ function attachDragScrollAll(root) {
   (root || document).querySelectorAll('.search-fields, .product-table-wrap').forEach(makeDragScrollable);
 }
 
+// Expanded product rows (colspan across the whole table) need an explicit pixel
+// width set via JS — some mobile browsers (notably iPad Safari) miscalculate the
+// intrinsic width of flex content inside a table cell and refuse to let it scroll
+// on its own, so we pin it to the wrapper's actual rendered width instead.
+function fixExpandedRowWidths() {
+  const wrap = document.querySelector('.product-table-wrap');
+  if (!wrap) return;
+  const w = wrap.clientWidth;
+  if (!w) return;
+  document.querySelectorAll('.product-row-expanded td').forEach(td => {
+    td.style.width = w + 'px';
+    td.style.maxWidth = w + 'px';
+  });
+}
+window.addEventListener('resize', fixExpandedRowWidths);
+
 function registerDetailCopyText(text) {
   detailCopyTexts.push(text || '');
   return detailCopyTexts.length - 1;
@@ -561,6 +577,7 @@ function renderProductTable() {
   tbody.innerHTML = pageRows.map(renderProductTableRow).join('');
   renderPagination(filtered.length, productPage, totalPages);
   attachDragScrollAll(tbody.closest('.panel'));
+  fixExpandedRowWidths();
 }
 
 
@@ -632,7 +649,7 @@ async function loadData() {
 
 function startPolling() {
   if (pollTimer) clearInterval(pollTimer);
-  const ms = Math.max(5, Number(config.interval) || 60) * 1000;
+  const ms = Math.max(5, Number(config.interval) || 1800) * 1000;
   pollTimer = setInterval(() => { loadData(); loadRevenueHistory(); }, ms);
 }
 
@@ -876,7 +893,7 @@ document.getElementById('settingsSave').addEventListener('click', () => {
     sheetId: document.getElementById('cfgSheetId').value.trim() || DEFAULTS.sheetId,
     sheetName: document.getElementById('cfgSheetName').value.trim(),
     statusCol: document.getElementById('cfgStatusCol').value,
-    interval: Number(document.getElementById('cfgInterval').value) || 60,
+    interval: Number(document.getElementById('cfgInterval').value) || 1800,
     webAppUrl: document.getElementById('cfgWebAppUrl').value.trim(),
   };
   cachedAutoStatusCol = null; // sheet/column settings changed — re-detect once, fresh

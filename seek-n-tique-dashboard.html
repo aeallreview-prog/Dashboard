@@ -316,9 +316,9 @@ button:disabled { opacity: .55; cursor: wait; }
 .detail-cell-truncate { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .price-cell-highlight { background: #eafaf0; font-weight: 600; color: #16794a; }
 .product-row-expanded { white-space: normal; }
-.product-row-expanded td { padding: 0; background: var(--paper); cursor: default; }
+.product-row-expanded td { padding: 0; background: var(--paper); cursor: default; box-sizing: border-box; }
 .product-row-expanded .search-result-card { margin: 14px; }
-.product-row-expanded .search-fields { overflow-x: visible; }
+.product-row-expanded .search-fields { overflow-x: auto; }
 .product-table img { width: 40px; height: 40px; object-fit: cover; border-radius: 8px; background: var(--paper); vertical-align: middle; }
 .product-table .status-pill { display: inline-block; padding: 3px 10px; border-radius: 999px; color: #fff; font: 600 11px 'DM Sans', sans-serif; }
 .pagination { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 16px 24px 24px; flex-wrap: wrap; }
@@ -474,7 +474,7 @@ button:disabled { opacity: .55; cursor: wait; }
         <div>
           <p class="eyebrow">Live sales dashboard</p>
           <h1>สรุปยอดขาย</h1>
-          <p class="subtitle">ข้อมูลสดจาก Google Sheet — อัปเดตอัตโนมัติทุก 1 นาที</p>
+          <p class="subtitle">ข้อมูลสดจาก Google Sheet — อัปเดตอัตโนมัติทุก 30 นาที (หรือกดรีเฟรชเองได้ตลอด)</p>
         </div>
       </div>
       <div class="hero-right">
@@ -689,7 +689,7 @@ button:disabled { opacity: .55; cursor: wait; }
 
     <div class="field">
       <label>ความถี่รีเฟรช (วินาที)</label>
-      <input id="cfgInterval" type="number" min="5" value="60">
+      <input id="cfgInterval" type="number" min="5" value="1800">
     </div>
 
     <div class="field">
@@ -787,7 +787,7 @@ const DEFAULTS = {
   sheetId: '1uWbyx7ojEQ5iZpY6XSlk2xFiAko5bdVcsjjyMg4_OJg',
   sheetName: '',
   statusCol: 'auto',
-  interval: 60,
+  interval: 1800,
   webAppUrl: 'https://script.google.com/macros/s/AKfycbzPilMpuyx3ubwjo7LnOwKNhRv6JArBkpJLJPWtYxh_nkGhGINTs-SXL90aiT_XJ2yZ/exec',
 };
 
@@ -1056,6 +1056,22 @@ function attachDragScrollAll(root) {
   (root || document).querySelectorAll('.search-fields, .product-table-wrap').forEach(makeDragScrollable);
 }
 
+// Expanded product rows (colspan across the whole table) need an explicit pixel
+// width set via JS — some mobile browsers (notably iPad Safari) miscalculate the
+// intrinsic width of flex content inside a table cell and refuse to let it scroll
+// on its own, so we pin it to the wrapper's actual rendered width instead.
+function fixExpandedRowWidths() {
+  const wrap = document.querySelector('.product-table-wrap');
+  if (!wrap) return;
+  const w = wrap.clientWidth;
+  if (!w) return;
+  document.querySelectorAll('.product-row-expanded td').forEach(td => {
+    td.style.width = w + 'px';
+    td.style.maxWidth = w + 'px';
+  });
+}
+window.addEventListener('resize', fixExpandedRowWidths);
+
 function registerDetailCopyText(text) {
   detailCopyTexts.push(text || '');
   return detailCopyTexts.length - 1;
@@ -1323,6 +1339,7 @@ function renderProductTable() {
   tbody.innerHTML = pageRows.map(renderProductTableRow).join('');
   renderPagination(filtered.length, productPage, totalPages);
   attachDragScrollAll(tbody.closest('.panel'));
+  fixExpandedRowWidths();
 }
 
 
@@ -1394,7 +1411,7 @@ async function loadData() {
 
 function startPolling() {
   if (pollTimer) clearInterval(pollTimer);
-  const ms = Math.max(5, Number(config.interval) || 60) * 1000;
+  const ms = Math.max(5, Number(config.interval) || 1800) * 1000;
   pollTimer = setInterval(() => { loadData(); loadRevenueHistory(); }, ms);
 }
 
@@ -1638,7 +1655,7 @@ document.getElementById('settingsSave').addEventListener('click', () => {
     sheetId: document.getElementById('cfgSheetId').value.trim() || DEFAULTS.sheetId,
     sheetName: document.getElementById('cfgSheetName').value.trim(),
     statusCol: document.getElementById('cfgStatusCol').value,
-    interval: Number(document.getElementById('cfgInterval').value) || 60,
+    interval: Number(document.getElementById('cfgInterval').value) || 1800,
     webAppUrl: document.getElementById('cfgWebAppUrl').value.trim(),
   };
   cachedAutoStatusCol = null; // sheet/column settings changed — re-detect once, fresh
