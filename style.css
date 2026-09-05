@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Mono&family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono&family=DM+Sans:wght@400;500;600;700&display=swap');
 
 :root {
   --ink: #11263a;
@@ -250,7 +250,7 @@ button:disabled { opacity: .55; cursor: wait; }
 .search-result-head strong { font: 700 20px 'DM Sans', sans-serif; letter-spacing: -.03em; }
 .search-result-head .btn-edit { background: rgba(255,255,255,.2); color: #fff; font-size: 11px; padding: 7px 12px; flex: none; }
 .search-result-head .btn-edit:hover { background: rgba(255,255,255,.32); }
-.search-fields { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 1px; background: var(--line); scrollbar-width: thin; align-items: stretch; }
+.search-fields { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 1px; background: var(--line); scrollbar-width: thin; align-items: stretch; cursor: grab; }
 .search-field {
   flex: 0 0 118px; padding: 12px 10px; background: var(--card);
   display: flex; flex-direction: column; align-items: center; text-align: center;
@@ -292,7 +292,8 @@ button:disabled { opacity: .55; cursor: wait; }
   padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line);
   font: 500 12px 'DM Sans', sans-serif; color: var(--ink); background: var(--paper);
 }
-.product-table-wrap { overflow-x: auto; padding: 0 24px 6px; scrollbar-width: thin; }
+.product-table-wrap { overflow-x: auto; padding: 0 24px 6px; scrollbar-width: thin; cursor: grab; }
+.product-table-wrap.drag-scrolling, .search-fields.drag-scrolling { cursor: grabbing; user-select: none; }
 .product-table { width: 100%; border-collapse: collapse; font-size: 13px; white-space: nowrap; }
 .product-table th {
   text-align: left; padding: 10px 14px; color: var(--muted); font-size: 11px;

@@ -102,6 +102,8 @@ function rowHasProduct(row) {
 }
 
 // ---------- status column detection ----------
+let cachedAutoStatusCol = null; // computed once on first load, reused on every later poll
+
 function detectStatusColumn(rows) {
   const knownLabels = Object.keys(LABEL_TO_KEY);
   let bestCol = -1, bestCount = -1;
@@ -259,6 +261,39 @@ function handleImgError(imgEl) {
 
 let detailCopyTexts = []; // reset before each render batch; index referenced by copy buttons
 
+// ---------- click-and-drag horizontal scrolling ----------
+// Lets desktop users click-drag wide tables/cards sideways instead of needing a scrollbar,
+// similar to a touch swipe. Skips drag-start on interactive elements (buttons/inputs/etc.)
+// so clicks there still work normally.
+function makeDragScrollable(el) {
+  if (!el || el.dataset.dragScrollAttached) return;
+  el.dataset.dragScrollAttached = '1';
+  let isDown = false, startX = 0, scrollStart = 0, moved = false;
+
+  el.addEventListener('mousedown', (e) => {
+    if (e.target.closest('button, input, select, textarea, a, img')) return;
+    isDown = true;
+    moved = false;
+    el.classList.add('drag-scrolling');
+    startX = e.pageX;
+    scrollStart = el.scrollLeft;
+  });
+  window.addEventListener('mouseup', () => { isDown = false; el.classList.remove('drag-scrolling'); });
+  window.addEventListener('mousemove', (e) => {
+    if (!isDown) return;
+    e.preventDefault();
+    if (Math.abs(e.pageX - startX) > 3) moved = true;
+    el.scrollLeft = scrollStart - (e.pageX - startX);
+  });
+  // suppress the click that follows a real drag so it doesn't accidentally
+  // trigger row expand/collapse right after dragging
+  el.addEventListener('click', (e) => { if (moved) { e.stopPropagation(); moved = false; } }, true);
+}
+
+function attachDragScrollAll(root) {
+  (root || document).querySelectorAll('.search-fields, .product-table-wrap').forEach(makeDragScrollable);
+}
+
 function registerDetailCopyText(text) {
   detailCopyTexts.push(text || '');
   return detailCopyTexts.length - 1;
@@ -354,6 +389,7 @@ function doSearch() {
     html += `<p class="search-empty">ไม่พบข้อมูล No. ${notFound.map(v => `"${v}"`).join(', ')}</p>`;
   }
   box.innerHTML = notice + html;
+  attachDragScrollAll(box);
 }
 
 // ---------- product table (all products, filterable + paginated) ----------
@@ -524,6 +560,7 @@ function renderProductTable() {
   const pageRows = filtered.slice(start, start + PRODUCT_PAGE_SIZE);
   tbody.innerHTML = pageRows.map(renderProductTableRow).join('');
   renderPagination(filtered.length, productPage, totalPages);
+  attachDragScrollAll(tbody.closest('.panel'));
 }
 
 
@@ -550,12 +587,17 @@ async function loadData() {
     document.getElementById('expenseVal').textContent = fmtMoney(expense);
     document.getElementById('profitVal').textContent = fmtMoney(profit);
 
-    // Status column: manual override or auto-detect
+    // Status column: manual override, or auto-detect once and cache it
+    // (re-scanning every column × every row on every 1-minute poll is wasted work
+    // once the sheet's structure is known — it essentially never changes)
     let statusColIdx;
     if (config.statusCol && config.statusCol !== 'auto') {
       statusColIdx = colToIndex(config.statusCol);
+    } else if (cachedAutoStatusCol !== null) {
+      statusColIdx = cachedAutoStatusCol;
     } else {
       statusColIdx = detectStatusColumn(rows);
+      cachedAutoStatusCol = statusColIdx;
     }
 
     let counts = { none: 0, shipped: 0, listed: 0, partial: 0, reserved: 0, soldout: 0 }, total = 0, other = 0;
@@ -837,6 +879,7 @@ document.getElementById('settingsSave').addEventListener('click', () => {
     interval: Number(document.getElementById('cfgInterval').value) || 60,
     webAppUrl: document.getElementById('cfgWebAppUrl').value.trim(),
   };
+  cachedAutoStatusCol = null; // sheet/column settings changed — re-detect once, fresh
   saveConfig(config);
   closeSettings();
   loadData();
