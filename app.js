@@ -341,7 +341,7 @@ function renderSearchResult(row) {
     } else if (i === DETAIL_COL) {
       const copyIdx = registerDetailCopyText(rawText);
       fields += `<div class="search-field detail-field">
-        <div class="detail-field-head"><p>${headerLabel(i)}</p><button class="detail-copy-btn" onclick="copyDetailText(${copyIdx}, this)" title="คัดลอก">⧉</button></div>
+        <div class="detail-field-head"><p>${headerLabel(i)}</p><button class="detail-copy-btn" onclick="event.stopPropagation(); copyDetailText(${copyIdx}, this)" title="คัดลอก">⧉</button></div>
         <strong>${text}</strong>
       </div>`;
     } else if (i === PRICE_COL) {
@@ -472,6 +472,14 @@ function toggleProductRow(noVal) {
 function renderProductTableRow(row) {
   const noVal = cellText(row.c && row.c[0]) || '-';
   const visibleCols = getVisibleCols();
+  const noKey = escapeHtml(noVal);
+
+  if (expandedProductRows.has(noVal)) {
+    // expanded: show only the full detail card in place of the summary row —
+    // clicking anywhere on it (except its own buttons) collapses back to the table row
+    return `<tr class="product-row-expanded" onclick="toggleProductRow('${noKey}')"><td colspan="${visibleCols.length}">${renderSearchResult(row)}</td></tr>`;
+  }
+
   const cells = visibleCols.map(i => {
     const rawText = cellText(row.c && row.c[i]);
     const text = rawText || '-';
@@ -494,13 +502,7 @@ function renderProductTableRow(row) {
     return `<td>${text}</td>`;
   }).join('');
 
-  const noKey = escapeHtml(noVal);
-  let html = `<tr class="product-row" onclick="toggleProductRow('${noKey}')">${cells}</tr>`;
-
-  if (expandedProductRows.has(noVal)) {
-    html += `<tr class="product-row-expanded"><td colspan="${visibleCols.length}">${renderSearchResult(row)}</td></tr>`;
-  }
-  return html;
+  return `<tr class="product-row" onclick="toggleProductRow('${noKey}')">${cells}</tr>`;
 }
 
 function buildPageNumbers(current, total) {
@@ -1316,6 +1318,50 @@ function assembleDetailTemplate() {
 }
 document.getElementById('tplGenerateBtn').addEventListener('click', assembleDetailTemplate);
 
+// parses a previously-generated Detail text back into the template builder fields,
+// so re-opening an existing product for edit doesn't mean retyping everything
+function parseDetailTemplate(text) {
+  const result = { title: '', width: '', length: '', height: '', price: '', closing: '', includeLength: false };
+  if (!text) return result;
+  const isBlank = v => !v || /^\.+$/.test(v);
+
+  const firstLine = text.split('\n')[0] || '';
+  const titleMatch = firstLine.match(/^No\.\S*\s*(.*)$/);
+  if (titleMatch && !isBlank(titleMatch[1].trim())) result.title = titleMatch[1].trim();
+
+  const widthMatch = text.match(/กว้าง\s*([^\s,]+)\s*cm\./);
+  if (widthMatch && !isBlank(widthMatch[1])) result.width = widthMatch[1];
+
+  const lengthMatch = text.match(/ยาว\s*([^\s,]+)\s*cm\./);
+  if (lengthMatch) {
+    result.includeLength = true;
+    if (!isBlank(lengthMatch[1])) result.length = lengthMatch[1];
+  }
+
+  const heightMatch = text.match(/สูง\s*([^\s,]+)\s*cm\./);
+  if (heightMatch && !isBlank(heightMatch[1])) result.height = heightMatch[1];
+
+  const priceMatch = text.match(/ราคา\s*:\s*([^\s]+)\s*บาท/);
+  if (priceMatch && !isBlank(priceMatch[1])) result.price = priceMatch[1].replace(/,/g, '');
+
+  const closingMatch = text.match(/\(ราคายังไม่รวมค่าจัดส่ง\)\s*\n-+\s*\n([\s\S]*)$/);
+  if (closingMatch) result.closing = closingMatch[1].trim();
+
+  return result;
+}
+
+function fillTemplateBuilderFrom(detailText) {
+  const parsed = parseDetailTemplate(detailText);
+  document.getElementById('tplTitle').value = parsed.title;
+  document.getElementById('tplWidth').value = parsed.width;
+  document.getElementById('tplIncludeLength').checked = parsed.includeLength;
+  document.getElementById('tplLengthField').style.display = parsed.includeLength ? '' : 'none';
+  document.getElementById('tplLength').value = parsed.length;
+  document.getElementById('tplHeight').value = parsed.height;
+  document.getElementById('tplPrice').value = parsed.price;
+  document.getElementById('tplClosing').value = parsed.closing || DEFAULT_CLOSING_NOTE;
+}
+
 function openEditProductModal(noVal) {
   const row = findRowByNo(noVal);
   if (!row) return;
@@ -1324,8 +1370,9 @@ function openEditProductModal(noVal) {
   document.getElementById('productFormTitle').textContent = `แก้ไขสินค้า No. ${noVal}`;
   document.getElementById('productFormSubtitle').textContent = 'แก้เฉพาะช่องที่เปลี่ยน แล้วกดบันทึก';
   document.getElementById('pfP').value = cellText(row.c && row.c[IMAGE_COL]);
-  resetTemplateBuilder();
-  document.getElementById('pfC').value = cellText(row.c && row.c[DETAIL_COL]);
+  const detailText = cellText(row.c && row.c[DETAIL_COL]);
+  document.getElementById('pfC').value = detailText;
+  fillTemplateBuilderFrom(detailText);
   document.getElementById('pfE').value = cellText(row.c && row.c[colToIndex('E')]);
   document.getElementById('pfF').value = cellText(row.c && row.c[PRICE_COL]);
   document.getElementById('pfH').value = cellText(row.c && row.c[colToIndex('H')]);

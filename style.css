@@ -302,6 +302,7 @@ button:disabled { opacity: .55; cursor: wait; }
 .product-table td { padding: 10px 14px; border-bottom: 1px solid var(--line); color: var(--ink); }
 .product-table tr:last-child td { border-bottom: 0; }
 .product-table tr.product-row { cursor: pointer; }
+.product-table tr.product-row-expanded { cursor: pointer; }
 .product-table tr.product-row:hover td { background: var(--paper); }
 .product-table tr.product-row:hover td.price-cell-highlight { background: #dcf5e3; }
 .detail-cell-truncate { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
