@@ -832,7 +832,9 @@ function doCalculate() {
     const price = extractPriceFromDetail(detailText);
     if (price === null) { notFound.push(val); return; }
     const status = cellText(row.c && row.c[STATUS_DISPLAY_COL]);
-    found.push({ no: cellText(row.c && row.c[0]) || val, price, status });
+    const imgRaw = cellText(row.c && row.c[IMAGE_COL]);
+    const image = looksLikeImageUrl(imgRaw) ? resolveImageUrl(imgRaw) : '';
+    found.push({ no: cellText(row.c && row.c[0]) || val, price, status, image });
   });
 
   if (!found.length) {
@@ -845,7 +847,10 @@ function doCalculate() {
 
   const itemRows = calcItems.map((item, i) => `
     <div class="calc-row calc-row-qty">
-      <span>No. ${item.no}${item.status ? ` (${item.status})` : ''} ราคา ${fmtMoney(item.price)}</span>
+      <span class="calc-item-label">
+        ${item.image ? `<img class="calc-item-thumb" src="${item.image}" alt="รูปสินค้า No. ${item.no}" onerror="this.remove()">` : ''}
+        No. ${item.no}${item.status ? ` (${item.status})` : ''} ราคา ${fmtMoney(item.price)}
+      </span>
       <span class="calc-qty-input-wrap">
         จำนวน <input type="number" class="calc-qty-input" min="1" value="1" oninput="updateCalcQty(${i}, this.value)"> ชิ้น
         = <span id="calcLine${i}">${fmtMoney(item.price)}</span>
@@ -990,42 +995,42 @@ function buildSeries(metric) {
     .map(r => ({ date: r.date, value: r[metric] }));
 }
 
+const RANGE_CONFIGS = {
+  minute: { key: minuteKey, fmt: { hour: '2-digit', minute: '2-digit' }, isTime: true },
+  hour:   { key: hourKey,   fmt: { hour: '2-digit', minute: '2-digit' }, isTime: true },
+  day:    { key: dayKey,    fmt: { day: '2-digit', month: '2-digit' }, isTime: false },
+  week:   { key: weekKey,   fmt: { day: '2-digit', month: '2-digit' }, isTime: false },
+  month:  { key: monthKey,  fmt: { month: 'short', year: '2-digit' }, isTime: false },
+  year:   { key: yearKey,   fmt: { year: 'numeric' }, isTime: false },
+};
+
 function aggregateHistory(series, range) {
-  const cfgs = {
-    minute: { key: minuteKey, fmt: { hour: '2-digit', minute: '2-digit' } },
-    hour:   { key: hourKey,   fmt: { hour: '2-digit', minute: '2-digit' } },
-    day:    { key: dayKey,    fmt: { day: '2-digit', month: '2-digit' } },
-    week:   { key: weekKey,   fmt: { day: '2-digit', month: '2-digit' } },
-    month:  { key: monthKey,  fmt: { month: 'short', year: '2-digit' } },
-    year:   { key: yearKey,   fmt: { year: 'numeric' } },
-  };
-  const c = cfgs[range] || cfgs.week;
+  const c = RANGE_CONFIGS[range] || RANGE_CONFIGS.week;
   return lastPerGroup(series, c.key).slice(-CHART_POINTS).map(p => ({
-    label: range === 'minute' || range === 'hour'
-      ? p.date.toLocaleTimeString('th-TH', c.fmt)
-      : p.date.toLocaleDateString('th-TH', c.fmt),
+    label: c.isTime ? p.date.toLocaleTimeString('th-TH', c.fmt) : p.date.toLocaleDateString('th-TH', c.fmt),
     value: p.value,
   }));
 }
 
 const CUSTOM_RANGE_MAX_POINTS = 40; // cap so long custom ranges stay readable
 
-function pointsForCustomRange(series, from, to) {
+function pointsForCustomRange(series, from, to, range) {
   const filtered = series.filter(p => p.date >= from && p.date <= to);
-  const spanMs = to - from;
-  const showTime = spanMs <= 3 * 24 * 60 * 60 * 1000; // <=3 days: show date+time
-  const fmt = showTime
-    ? { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }
-    : { day: '2-digit', month: '2-digit', year: '2-digit' };
-  const label = d => d.toLocaleString('th-TH', fmt);
+  const c = RANGE_CONFIGS[range] || RANGE_CONFIGS.week;
+  const label = d => c.isTime ? d.toLocaleTimeString('th-TH', c.fmt) : d.toLocaleDateString('th-TH', c.fmt);
 
-  if (filtered.length <= CUSTOM_RANGE_MAX_POINTS) {
-    return filtered.map(p => ({ label: label(p.date), value: p.value }));
+  // group by the currently-selected granularity (day/hour/week/...) within the
+  // chosen date range, so "วัน" gives one point per day, "ชั่วโมง" one per hour, etc.
+  const grouped = lastPerGroup(filtered, c.key);
+
+  if (grouped.length <= CUSTOM_RANGE_MAX_POINTS) {
+    return grouped.map(p => ({ label: label(p.date), value: p.value }));
   }
-  // too many raw points — bucket evenly across the range and keep the latest per bucket
+  // still too many groups to read — bucket evenly across the range instead
+  const spanMs = to - from;
   const bucketMs = spanMs / CUSTOM_RANGE_MAX_POINTS;
   const map = new Map();
-  filtered.forEach(p => {
+  grouped.forEach(p => {
     const idx = Math.min(CUSTOM_RANGE_MAX_POINTS - 1, Math.floor((p.date - from) / bucketMs));
     const existing = map.get(idx);
     if (!existing || p.date > existing.date) map.set(idx, p);
@@ -1034,7 +1039,7 @@ function pointsForCustomRange(series, from, to) {
 }
 
 function getPoints(series) {
-  if (customRange) return pointsForCustomRange(series, customRange.from, customRange.to);
+  if (customRange) return pointsForCustomRange(series, customRange.from, customRange.to, trendRange);
   return aggregateHistory(series, trendRange);
 }
 
