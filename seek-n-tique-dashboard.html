@@ -322,6 +322,14 @@ button:disabled { opacity: .55; cursor: wait; }
 .product-row-expanded .search-fields { overflow-x: auto; }
 .product-table img { width: 40px; height: 40px; object-fit: cover; border-radius: 8px; background: var(--paper); vertical-align: middle; }
 .product-table .status-pill { display: inline-block; padding: 3px 10px; border-radius: 999px; color: #fff; font: 600 11px 'DM Sans', sans-serif; }
+.quick-status-select {
+  border: none; border-radius: 8px; padding: 6px 8px; color: #fff; font: 600 11px 'DM Sans', sans-serif;
+  cursor: pointer; appearance: none; -webkit-appearance: none; -moz-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0l5 6 5-6z' fill='white'/></svg>");
+  background-repeat: no-repeat; background-position: right 8px center; padding-right: 22px;
+}
+.quick-status-select:disabled { opacity: .6; cursor: wait; }
+.quick-status-select option { background: var(--card); color: var(--ink); }
 .pagination { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 16px 24px 24px; flex-wrap: wrap; }
 .pagination-nums { display: flex; align-items: center; gap: 4px; }
 .pagination-num { min-width: 32px; padding: 7px 8px; justify-content: center; }
@@ -1088,6 +1096,37 @@ function copyDetailText(idx, btn) {
   });
 }
 
+// ---------- quick inline status change (table row + search card) ----------
+function buildQuickStatusSelect(noVal, currentStatus) {
+  const key = LABEL_TO_KEY[currentStatus];
+  const bg = key ? STATUS_COLOR_HEX[key] : '#97a2ad';
+  const options = STATUS_DEFS.map(def =>
+    `<option value="${def.label}" ${def.label === currentStatus ? 'selected' : ''}>${def.label}</option>`
+  ).join('');
+  const noKey = escapeHtml(noVal);
+  const statusKey = escapeHtml(currentStatus || '');
+  return `<select class="quick-status-select" style="background:${bg}" data-original-value="${statusKey}"
+    onclick="event.stopPropagation()"
+    onchange="event.stopPropagation(); quickUpdateStatus('${noKey}', this.value, this)">${options}</select>`;
+}
+
+async function quickUpdateStatus(noVal, newStatus, selectEl) {
+  const original = selectEl.dataset.originalValue;
+  const key = LABEL_TO_KEY[newStatus];
+  selectEl.style.background = key ? STATUS_COLOR_HEX[key] : '#97a2ad';
+  selectEl.disabled = true;
+  try {
+    await callWriteApi('updateProduct', { no: noVal, fields: { O: newStatus } });
+    await loadData(); // re-renders everything with the fresh status + updated counts/donut
+  } catch (err) {
+    alert('เปลี่ยนสถานะไม่สำเร็จ: ' + err.message);
+    selectEl.value = original;
+    const origKey = LABEL_TO_KEY[original];
+    selectEl.style.background = origKey ? STATUS_COLOR_HEX[origKey] : '#97a2ad';
+    selectEl.disabled = false;
+  }
+}
+
 function renderSearchResult(row) {
   const noVal = cellText(row.c && row.c[0]) || '-';
   let fields = '';
@@ -1112,9 +1151,7 @@ function renderSearchResult(row) {
     } else if (i === PRICE_COL) {
       fields += `<div class="search-field price-field"><p>${headerLabel(i)}</p><strong>${text}</strong></div>`;
     } else if (i === STATUS_DISPLAY_COL) {
-      const key = LABEL_TO_KEY[rawText];
-      const bg = key ? STATUS_COLOR_HEX[key] : '#97a2ad';
-      fields += `<div class="search-field status-field" style="background:${bg}"><p>${headerLabel(i)}</p><strong>${text}</strong></div>`;
+      fields += `<div class="search-field"><p>${headerLabel(i)}</p>${buildQuickStatusSelect(noVal, rawText)}</div>`;
     } else {
       fields += `<div class="search-field"><p>${headerLabel(i)}</p><strong>${text}</strong></div>`;
     }
@@ -1254,9 +1291,7 @@ function renderProductTableRow(row) {
         : `<td>-</td>`;
     }
     if (i === STATUS_DISPLAY_COL) {
-      const key = LABEL_TO_KEY[rawText];
-      const bg = key ? STATUS_COLOR_HEX[key] : '#97a2ad';
-      return `<td><span class="status-pill" style="background:${bg}">${text}</span></td>`;
+      return `<td>${buildQuickStatusSelect(noVal, rawText)}</td>`;
     }
     if (i === DETAIL_COL) {
       return `<td><div class="detail-cell-truncate">${text}</div></td>`;

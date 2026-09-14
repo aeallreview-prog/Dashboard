@@ -323,6 +323,37 @@ function copyDetailText(idx, btn) {
   });
 }
 
+// ---------- quick inline status change (table row + search card) ----------
+function buildQuickStatusSelect(noVal, currentStatus) {
+  const key = LABEL_TO_KEY[currentStatus];
+  const bg = key ? STATUS_COLOR_HEX[key] : '#97a2ad';
+  const options = STATUS_DEFS.map(def =>
+    `<option value="${def.label}" ${def.label === currentStatus ? 'selected' : ''}>${def.label}</option>`
+  ).join('');
+  const noKey = escapeHtml(noVal);
+  const statusKey = escapeHtml(currentStatus || '');
+  return `<select class="quick-status-select" style="background:${bg}" data-original-value="${statusKey}"
+    onclick="event.stopPropagation()"
+    onchange="event.stopPropagation(); quickUpdateStatus('${noKey}', this.value, this)">${options}</select>`;
+}
+
+async function quickUpdateStatus(noVal, newStatus, selectEl) {
+  const original = selectEl.dataset.originalValue;
+  const key = LABEL_TO_KEY[newStatus];
+  selectEl.style.background = key ? STATUS_COLOR_HEX[key] : '#97a2ad';
+  selectEl.disabled = true;
+  try {
+    await callWriteApi('updateProduct', { no: noVal, fields: { O: newStatus } });
+    await loadData(); // re-renders everything with the fresh status + updated counts/donut
+  } catch (err) {
+    alert('เปลี่ยนสถานะไม่สำเร็จ: ' + err.message);
+    selectEl.value = original;
+    const origKey = LABEL_TO_KEY[original];
+    selectEl.style.background = origKey ? STATUS_COLOR_HEX[origKey] : '#97a2ad';
+    selectEl.disabled = false;
+  }
+}
+
 function renderSearchResult(row) {
   const noVal = cellText(row.c && row.c[0]) || '-';
   let fields = '';
@@ -347,9 +378,7 @@ function renderSearchResult(row) {
     } else if (i === PRICE_COL) {
       fields += `<div class="search-field price-field"><p>${headerLabel(i)}</p><strong>${text}</strong></div>`;
     } else if (i === STATUS_DISPLAY_COL) {
-      const key = LABEL_TO_KEY[rawText];
-      const bg = key ? STATUS_COLOR_HEX[key] : '#97a2ad';
-      fields += `<div class="search-field status-field" style="background:${bg}"><p>${headerLabel(i)}</p><strong>${text}</strong></div>`;
+      fields += `<div class="search-field"><p>${headerLabel(i)}</p>${buildQuickStatusSelect(noVal, rawText)}</div>`;
     } else {
       fields += `<div class="search-field"><p>${headerLabel(i)}</p><strong>${text}</strong></div>`;
     }
@@ -489,9 +518,7 @@ function renderProductTableRow(row) {
         : `<td>-</td>`;
     }
     if (i === STATUS_DISPLAY_COL) {
-      const key = LABEL_TO_KEY[rawText];
-      const bg = key ? STATUS_COLOR_HEX[key] : '#97a2ad';
-      return `<td><span class="status-pill" style="background:${bg}">${text}</span></td>`;
+      return `<td>${buildQuickStatusSelect(noVal, rawText)}</td>`;
     }
     if (i === DETAIL_COL) {
       return `<td><div class="detail-cell-truncate">${text}</div></td>`;
