@@ -408,6 +408,7 @@ const MAX_SEARCH_ITEMS = 5;
 function doSearch() {
   const box = document.getElementById('searchResult');
   const raw = document.getElementById('searchInput').value.trim();
+  updateSearchClearBtn();
   if (!raw) { box.innerHTML = ''; return; }
   if (!lastRows) {
     box.innerHTML = '<p class="search-empty">ยังไม่มีข้อมูล กรุณารอให้โหลดข้อมูลก่อน</p>';
@@ -918,6 +919,18 @@ document.getElementById('searchBtn').addEventListener('click', doSearch);
 document.getElementById('searchInput').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') doSearch();
 });
+document.getElementById('searchInput').addEventListener('input', updateSearchClearBtn);
+document.getElementById('searchClearBtn').addEventListener('click', clearSearch);
+function updateSearchClearBtn() {
+  const hasText = document.getElementById('searchInput').value.trim() !== '';
+  document.getElementById('searchClearBtn').style.display = hasText ? '' : 'none';
+}
+function clearSearch() {
+  document.getElementById('searchInput').value = '';
+  document.getElementById('searchResult').innerHTML = '';
+  updateSearchClearBtn();
+  document.getElementById('searchInput').focus();
+}
 document.getElementById('settingsCancel').addEventListener('click', closeSettings);
 document.getElementById('settingsBackdrop').addEventListener('click', (e) => {
   if (e.target.id === 'settingsBackdrop') closeSettings();
