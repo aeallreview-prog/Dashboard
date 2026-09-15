@@ -302,7 +302,27 @@
         ระบุความยาว (ยาว)
       </label>
       <div class="field" id="tplLengthField" style="display:none;"><label>ยาว (cm.)</label><input id="tplLength" type="number"></div>
-      <div class="field"><label>ราคา (บาท)</label><input id="tplPrice" type="number"></div>
+      <div class="field">
+        <label>ราคา (บาท)</label>
+        <div style="display:flex;gap:8px;">
+          <input id="tplPrice" type="number" style="flex:1;">
+          <button type="button" class="ghost" id="tplSpecialBtn" style="flex:none;">พิเศษ</button>
+        </div>
+      </div>
+      <div id="tplSpecialOptions" style="display:none;">
+        <div class="field">
+          <label>หน่วยราคา</label>
+          <select id="tplPriceUnit">
+            <option value="">ปกติ (ไม่ระบุหน่วย)</option>
+            <option value="/ใบ">/ใบ</option>
+            <option value="/set">/set</option>
+          </select>
+        </div>
+        <div class="field" id="tplStockField" style="display:none;">
+          <label>มี In Stock กี่ใบ</label>
+          <input id="tplStock" type="number" placeholder="เช่น 5">
+        </div>
+      </div>
       <div class="field"><label>ข้อความปิดท้าย/แฮชแท็ก</label><textarea id="tplClosing" rows="3" style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line);font:500 13px 'DM Sans',sans-serif;color:var(--ink);background:var(--card);resize:vertical;"></textarea></div>
       <button type="button" class="btn-yellow" id="tplGenerateBtn" style="width:100%;justify-content:center;">สร้างข้อความอัตโนมัติ ↓</button>
     </div>

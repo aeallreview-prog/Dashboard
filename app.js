@@ -1328,11 +1328,22 @@ function resetTemplateBuilder() {
   document.getElementById('tplIncludeLength').checked = false;
   document.getElementById('tplLengthField').style.display = 'none';
   document.getElementById('tplPrice').value = '';
+  document.getElementById('tplPriceUnit').value = '';
+  document.getElementById('tplStock').value = '';
+  document.getElementById('tplStockField').style.display = 'none';
+  document.getElementById('tplSpecialOptions').style.display = 'none';
   document.getElementById('tplClosing').value = DEFAULT_CLOSING_NOTE;
 }
 
 document.getElementById('tplIncludeLength').addEventListener('change', (e) => {
   document.getElementById('tplLengthField').style.display = e.target.checked ? '' : 'none';
+});
+document.getElementById('tplSpecialBtn').addEventListener('click', () => {
+  const box = document.getElementById('tplSpecialOptions');
+  box.style.display = box.style.display === 'none' ? '' : 'none';
+});
+document.getElementById('tplPriceUnit').addEventListener('change', (e) => {
+  document.getElementById('tplStockField').style.display = e.target.value === '/ใบ' ? '' : 'none';
 });
 
 function assembleDetailTemplate() {
@@ -1343,18 +1354,23 @@ function assembleDetailTemplate() {
   const length = document.getElementById('tplLength').value.trim();
   const height = document.getElementById('tplHeight').value.trim();
   const price = document.getElementById('tplPrice').value.trim();
+  const priceUnit = document.getElementById('tplPriceUnit').value;
+  const stock = document.getElementById('tplStock').value.trim();
   const closing = document.getElementById('tplClosing').value.trim();
 
   let sizeLine = `ขนาด : กว้าง ${width || '.....'} cm.`;
   if (includeLength) sizeLine += ` , ยาว ${length || '.....'} cm.`;
   sizeLine += ` , สูง ${height || '.....'} cm.`;
 
+  let priceLine = `ราคา : ${price || '.......'} บาท${priceUnit}`;
+  if (priceUnit === '/ใบ' && stock) priceLine += ` (มี In Stock ${stock} ใบ)`;
+
   const lines = [
     `No.${no !== null && no !== undefined ? no : '...'} ${title || '..........................................................................'}`,
     '--------------------',
     sizeLine,
     '--------------------',
-    `ราคา : ${price || '.......'} บาท`,
+    priceLine,
     '(ราคายังไม่รวมค่าจัดส่ง)',
     '--------------------',
     closing || DEFAULT_CLOSING_NOTE,
@@ -1366,7 +1382,7 @@ document.getElementById('tplGenerateBtn').addEventListener('click', assembleDeta
 // parses a previously-generated Detail text back into the template builder fields,
 // so re-opening an existing product for edit doesn't mean retyping everything
 function parseDetailTemplate(text) {
-  const result = { title: '', width: '', length: '', height: '', price: '', closing: '', includeLength: false };
+  const result = { title: '', width: '', length: '', height: '', price: '', priceUnit: '', stock: '', closing: '', includeLength: false };
   if (!text) return result;
   const isBlank = v => !v || /^\.+$/.test(v);
 
@@ -1386,8 +1402,12 @@ function parseDetailTemplate(text) {
   const heightMatch = text.match(/สูง\s*([^\s,]+)\s*cm\./);
   if (heightMatch && !isBlank(heightMatch[1])) result.height = heightMatch[1];
 
-  const priceMatch = text.match(/ราคา\s*:\s*([^\s]+)\s*บาท/);
+  const priceMatch = text.match(/ราคา\s*:\s*([^\s]+)\s*บาท(\/ใบ|\/set)?/);
   if (priceMatch && !isBlank(priceMatch[1])) result.price = priceMatch[1].replace(/,/g, '');
+  if (priceMatch && priceMatch[2]) result.priceUnit = priceMatch[2];
+
+  const stockMatch = text.match(/มี In Stock\s*([^\s]+)\s*ใบ/);
+  if (stockMatch && !isBlank(stockMatch[1])) result.stock = stockMatch[1];
 
   const closingMatch = text.match(/\(ราคายังไม่รวมค่าจัดส่ง\)\s*\n-+\s*\n([\s\S]*)$/);
   if (closingMatch) result.closing = closingMatch[1].trim();
@@ -1404,6 +1424,10 @@ function fillTemplateBuilderFrom(detailText) {
   document.getElementById('tplLength').value = parsed.length;
   document.getElementById('tplHeight').value = parsed.height;
   document.getElementById('tplPrice').value = parsed.price;
+  document.getElementById('tplPriceUnit').value = parsed.priceUnit;
+  document.getElementById('tplStock').value = parsed.stock;
+  document.getElementById('tplStockField').style.display = parsed.priceUnit === '/ใบ' ? '' : 'none';
+  document.getElementById('tplSpecialOptions').style.display = parsed.priceUnit ? '' : 'none';
   document.getElementById('tplClosing').value = parsed.closing || DEFAULT_CLOSING_NOTE;
 }
 
