@@ -292,7 +292,7 @@
 
     <div class="detail-template-builder">
       <p class="detail-template-builder-title">ตัวช่วยสร้างข้อความ Detail</p>
-      <div class="field"><label>ชื่อสินค้า</label><input id="tplTitle" type="text" placeholder="พิมพ์ชื่อ/คำอธิบายสินค้า"></div>
+      <div class="field"><label>ชื่อสินค้า</label><textarea id="tplTitle" rows="4" placeholder="พิมพ์ชื่อ/คำอธิบายสินค้า"></textarea></div>
       <div class="tpl-size-row">
         <div class="field"><label>กว้าง (cm.)</label><input id="tplWidth" type="number"></div>
         <div class="field"><label>สูง (cm.)</label><input id="tplHeight" type="number"></div>
@@ -306,7 +306,7 @@
         <label>ราคา (บาท)</label>
         <div style="display:flex;gap:8px;">
           <input id="tplPrice" type="number" style="flex:1;">
-          <button type="button" class="ghost" id="tplSpecialBtn" style="flex:none;">พิเศษ</button>
+          <button type="button" class="btn-special" id="tplSpecialBtn" aria-expanded="false">พิเศษ</button>
         </div>
       </div>
       <div id="tplSpecialOptions" style="display:none;">
@@ -341,7 +341,7 @@
       <button class="ghost" id="productFormCancel">ยกเลิก</button>
       <button id="productFormSave">บันทึก</button>
     </div>
-    <button type="button" class="btn-red" id="productFormDelete" style="width:100%;justify-content:center;margin-top:10px;">ลบสินค้านี้</button>
+    <button type="button" class="btn-delete-subtle" id="productFormDelete">ลบสินค้านี้</button>
   </div>
 </div>
 

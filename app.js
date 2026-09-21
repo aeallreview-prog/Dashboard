@@ -1332,6 +1332,8 @@ function resetTemplateBuilder() {
   document.getElementById('tplStock').value = '';
   document.getElementById('tplStockField').style.display = 'none';
   document.getElementById('tplSpecialOptions').style.display = 'none';
+  document.getElementById('tplSpecialBtn').classList.remove('active');
+  document.getElementById('tplSpecialBtn').setAttribute('aria-expanded', 'false');
   document.getElementById('tplClosing').value = DEFAULT_CLOSING_NOTE;
 }
 
@@ -1340,7 +1342,10 @@ document.getElementById('tplIncludeLength').addEventListener('change', (e) => {
 });
 document.getElementById('tplSpecialBtn').addEventListener('click', () => {
   const box = document.getElementById('tplSpecialOptions');
-  box.style.display = box.style.display === 'none' ? '' : 'none';
+  const isOpen = box.style.display === 'none';
+  box.style.display = isOpen ? '' : 'none';
+  document.getElementById('tplSpecialBtn').classList.toggle('active', isOpen);
+  document.getElementById('tplSpecialBtn').setAttribute('aria-expanded', String(isOpen));
 });
 document.getElementById('tplPriceUnit').addEventListener('change', (e) => {
   document.getElementById('tplStockField').style.display = e.target.value === 'ใบ' ? '' : 'none';
@@ -1384,8 +1389,7 @@ function parseDetailTemplate(text) {
   if (!text) return result;
   const isBlank = v => !v || /^\.+$/.test(v);
 
-  const firstLine = text.split('\n')[0] || '';
-  const titleMatch = firstLine.match(/^No\.\S*\s*(.*)$/);
+  const titleMatch = text.match(/^No\.\S*[ \t]*([\s\S]*?)(?:\n-+\s*(?:\n|$)|$)/);
   if (titleMatch && !isBlank(titleMatch[1].trim())) result.title = titleMatch[1].trim();
 
   const widthMatch = text.match(/กว้าง\s*([^\s,]+)\s*cm\./);
@@ -1426,7 +1430,21 @@ function fillTemplateBuilderFrom(detailText) {
   document.getElementById('tplStock').value = parsed.stock;
   document.getElementById('tplStockField').style.display = parsed.priceUnit === 'ใบ' ? '' : 'none';
   document.getElementById('tplSpecialOptions').style.display = parsed.priceUnit ? '' : 'none';
+  document.getElementById('tplSpecialBtn').classList.toggle('active', Boolean(parsed.priceUnit));
+  document.getElementById('tplSpecialBtn').setAttribute('aria-expanded', String(Boolean(parsed.priceUnit)));
   document.getElementById('tplClosing').value = parsed.closing || DEFAULT_CLOSING_NOTE;
+}
+
+function showProductForm() {
+  const backdrop = document.getElementById('productFormBackdrop');
+  const panel = backdrop.querySelector('.product-form-panel');
+  backdrop.classList.add('open');
+  backdrop.scrollTop = 0;
+  panel.scrollTop = 0;
+  requestAnimationFrame(() => {
+    backdrop.scrollTop = 0;
+    panel.scrollTop = 0;
+  });
 }
 
 function openEditProductModal(noVal) {
@@ -1449,7 +1467,7 @@ function openEditProductModal(noVal) {
   populateStatusSelect(document.getElementById('pfO'), cellText(row.c && row.c[STATUS_DISPLAY_COL]));
   document.getElementById('productFormError').textContent = '';
   document.getElementById('productFormDelete').style.display = '';
-  document.getElementById('productFormBackdrop').classList.add('open');
+  showProductForm();
 }
 
 function openAddProductModal() {
@@ -1463,7 +1481,7 @@ function openAddProductModal() {
   populateStatusSelect(document.getElementById('pfO'), 'ยังไม่ได้ลงขาย');
   document.getElementById('productFormError').textContent = '';
   document.getElementById('productFormDelete').style.display = 'none';
-  document.getElementById('productFormBackdrop').classList.add('open');
+  showProductForm();
 }
 
 function closeProductForm() {

@@ -287,6 +287,21 @@ button:disabled { opacity: .55; cursor: wait; }
 .detail-template-builder { background: var(--paper); border-radius: 14px; padding: 16px 16px 4px; margin-bottom: 16px; }
 .detail-template-builder-title { margin: 0 0 12px; font: 700 12px 'DM Sans', sans-serif; color: var(--blue); text-transform: uppercase; letter-spacing: .03em; }
 .tpl-size-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.btn-special {
+  flex: none; min-width: 76px; justify-content: center; border: 1px solid var(--accent);
+  border-radius: 10px; background: linear-gradient(135deg, var(--accent), #f3874a); color: #fff;
+  box-shadow: 0 3px 9px rgba(241,94,34,.22); padding: 10px 14px;
+}
+.btn-special:hover, .btn-special.active {
+  background: linear-gradient(135deg, var(--blue), #1f7dc4); border-color: var(--blue);
+  box-shadow: 0 3px 9px rgba(26,99,168,.22); color: #fff;
+}
+.btn-delete-subtle {
+  width: auto; justify-content: center; margin: 12px auto 0; padding: 6px 10px;
+  border: 1px solid #e7cbd0; border-radius: 9px; background: transparent;
+  color: #9b6670; font-size: 11px; font-weight: 500; opacity: .82;
+}
+.btn-delete-subtle:hover { background: #fff5f6; border-color: #dcaeb6; color: #a34452; opacity: 1; }
 .hide-sensitive-toggle input { width: 15px; height: 15px; accent-color: var(--blue); cursor: pointer; }
 .table-filter select {
   padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line);
@@ -369,6 +384,15 @@ button:disabled { opacity: .55; cursor: wait; }
 .field input, .field select {
   width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line);
   font: 500 13px 'DM Sans', sans-serif; color: var(--ink); background: var(--paper);
+}
+.product-form-panel input:not([type="checkbox"]),
+.product-form-panel select,
+.product-form-panel textarea {
+  background: #fff !important;
+}
+.product-form-panel textarea {
+  width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line);
+  font: 500 13px 'DM Sans', sans-serif; color: var(--ink); resize: vertical;
 }
 .field small { display: block; margin-top: 5px; color: var(--muted); font-size: 11px; }
 .settings-actions { display: flex; gap: 10px; margin-top: 18px; }
