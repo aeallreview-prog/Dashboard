@@ -2199,20 +2199,29 @@ function parseDetailTemplate(text) {
   if (!text) return result;
   const isBlank = v => !v || /^\.+$/.test(v);
 
-  const titleMatch = text.match(/^No\.\S*[ \t]*([\s\S]*?)(?:\n-+\s*(?:\n|$)|$)/);
-  if (titleMatch && !isBlank(titleMatch[1].trim())) result.title = titleMatch[1].trim();
-
-  const widthMatch = text.match(/กว้าง\s*([^\s,]+)\s*cm\./);
-  if (widthMatch && !isBlank(widthMatch[1])) result.width = widthMatch[1];
-
-  const lengthMatch = text.match(/ยาว\s*([^\s,]+)\s*cm\./);
-  if (lengthMatch) {
-    result.includeLength = true;
-    if (!isBlank(lengthMatch[1])) result.length = lengthMatch[1];
+  text = String(text).replace(/\r\n?/g, '\n').trim();
+  const dimensionFields = { 'กว้าง': 'width', 'ยาว': 'length', 'สูง': 'height' };
+  // Accept labelled centimetre measurements, including decimals and blank template values.
+  const dimensionPattern = /(กว้าง|ยาว|สูง)[ \t]*[:：]?[ \t]*(\d+(?:\.\d+)?|\.+)[ \t]*(?:cm\.?|ซม\.?|เซนติเมตร)?(?=[ \t]*(?:[,，/;|\n]|$|กว้าง|ยาว|สูง|ราคา))/gi;
+  for (const match of text.matchAll(dimensionPattern)) {
+    const field = dimensionFields[match[1]];
+    if (!result[field] && !isBlank(match[2])) result[field] = match[2];
+    if (field === 'length') result.includeLength = true;
   }
 
-  const heightMatch = text.match(/สูง\s*([^\s,]+)\s*cm\./);
-  if (heightMatch && !isBlank(heightMatch[1])) result.height = heightMatch[1];
+  // A missing divider must not turn sizes, prices or closing notes into a product name.
+  const titleBlock = text
+    .replace(/^No\.[ \t]*\d+[ \t]*/i, '')
+    .split(/^[ \t]*-{3,}[ \t]*$|(?:^|\n)[ \t]*(?:ราคา[ \t]*[:：]|In Stock[ \t]*[:：]|\(ราคายังไม่รวมค่าจัดส่ง\)|สินค้าเป็นของสะสม|#)/im)[0];
+  const title = titleBlock.split('\n').map(line => {
+    const withoutDimensions = line.replace(dimensionPattern, '');
+    if (withoutDimensions !== line || /^[ \t]*ขนาด[ \t]*[:：]?[ \t]*$/.test(line)) {
+      return withoutDimensions.replace(/ขนาด[ \t]*[:：]?[ \t]*/g, '')
+        .replace(/^[ \t,，/;|]+|[ \t,，/;|]+$/g, '').trim();
+    }
+    return line.trim();
+  }).filter(Boolean).join('\n');
+  if (!isBlank(title)) result.title = title;
 
   const priceMatch = text.match(/ราคา\s*:\s*([^\s]+)\s*บาท(?:\s*\/\s*(ใบ|set))?/);
   if (priceMatch && !isBlank(priceMatch[1])) result.price = priceMatch[1].replace(/,/g, '');
