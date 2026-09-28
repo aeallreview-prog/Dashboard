@@ -1576,41 +1576,147 @@ document.getElementById('productFormDelete').addEventListener('click', deletePro
 // Use the "ยกเลิก" button instead.
 
 // ---------- store finance modal ----------
-function openFinanceForm() {
-  const rowTwo = lastRows && lastRows[1];
-  document.getElementById('ffQ2').value = cellText(rowTwo && rowTwo.c && rowTwo.c[colToIndex('Q')]);
-  document.getElementById('ffR2').value = cellText(rowTwo && rowTwo.c && rowTwo.c[colToIndex('R')]);
-  document.getElementById('ffS2').value = cellText(rowTwo && rowTwo.c && rowTwo.c[colToIndex('S')]);
+const FINANCE_FIELDS = [
+  { key: 'Q2', label: 'เดินทาง' },
+  { key: 'R2', label: 'อุปกรณ์' },
+  { key: 'S2', label: 'ads' },
+];
+let financeTotals = null; // integer satang
+let financeSaving = false;
+let financeFormSession = 0;
+
+function financeMoney(cents) {
+  return (cents / 100).toLocaleString('th-TH', { maximumFractionDigits: 2 }) + ' บาท';
+}
+
+async function readCurrentFinance() {
+  const res = await fetch(buildUrl(config), { cache: 'no-store' });
+  if (!res.ok) throw new Error('โหลดรายจ่ายปัจจุบันไม่สำเร็จ กรุณาเปิดฟอร์มใหม่');
+  const table = parseGviz(await res.text());
+  const row = table.rows && table.rows[1];
+  if (!row || !row.c) throw new Error('ไม่พบยอดรายจ่ายปัจจุบัน กรุณาตรวจสอบข้อมูลในชีต');
+  const totals = {};
+  FINANCE_FIELDS.forEach(({ key, label }) => {
+    const cell = row.c[colToIndex(key[0])];
+    const blank = !cell || ((cell.v === null || cell.v === undefined || cell.v === '') && !cell.f);
+    const value = blank ? 0 : cellNumber(cell);
+    const cents = Math.round(value * 100);
+    if (value === null || !Number.isFinite(value) || !Number.isSafeInteger(cents)) {
+      throw new Error('ยอดปัจจุบันของ ' + label + ' ไม่ใช่ตัวเลข จึงยังเพิ่มยอดไม่ได้');
+    }
+    totals[key] = cents;
+  });
+  return totals;
+}
+
+function financeAddition(key) {
+  const input = document.getElementById('ff' + key);
+  const raw = input.value.trim();
+  if (input.validity.badInput) throw new Error('กรุณากรอกจำนวนเงินเป็นตัวเลข');
+  if (raw === '') return 0;
+  if (!/^\d+(?:\.\d{1,2})?$/.test(raw)) {
+    throw new Error('กรุณากรอกยอดเพิ่มตั้งแต่ 0 บาท และทศนิยมไม่เกิน 2 ตำแหน่ง');
+  }
+  const cents = Math.round(Number(raw) * 100);
+  if (!Number.isSafeInteger(cents)) throw new Error('จำนวนเงินสูงเกินไป');
+  return cents;
+}
+
+function renderFinanceTotals() {
+  FINANCE_FIELDS.forEach(({ key }) => {
+    document.getElementById('ff' + key + 'Current').textContent =
+      financeTotals ? financeMoney(financeTotals[key]) : 'กำลังโหลด…';
+    const preview = document.getElementById('ff' + key + 'Preview');
+    preview.textContent = '';
+    if (financeTotals) {
+      try {
+        const addition = financeAddition(key);
+        if (addition > 0) preview.textContent = 'ยอดหลังเพิ่ม: ' + financeMoney(financeTotals[key] + addition);
+      } catch (_) { /* Validation is shown when saving. */ }
+    }
+  });
+}
+
+function setFinanceInputsDisabled(disabled) {
+  FINANCE_FIELDS.forEach(({ key }) => { document.getElementById('ff' + key).disabled = disabled; });
+  document.getElementById('financeFormSave').disabled = disabled;
+}
+
+async function openFinanceForm() {
+  const session = ++financeFormSession;
+  financeTotals = null;
+  FINANCE_FIELDS.forEach(({ key }) => { document.getElementById('ff' + key).value = ''; });
   document.getElementById('financeFormError').textContent = '';
-  document.getElementById('financeFormBackdrop').classList.add('open');
+  setFinanceInputsDisabled(true);
+  renderFinanceTotals();
+  const backdrop = document.getElementById('financeFormBackdrop');
+  backdrop.classList.add('open');
+  backdrop.scrollTop = 0;
+  backdrop.querySelector('.settings-panel').scrollTop = 0;
+  try {
+    const totals = await readCurrentFinance();
+    if (session !== financeFormSession) return;
+    financeTotals = totals;
+    renderFinanceTotals();
+    setFinanceInputsDisabled(false);
+  } catch (err) {
+    if (session === financeFormSession) document.getElementById('financeFormError').textContent = err.message;
+  }
 }
 function closeFinanceForm() {
+  if (financeSaving) return;
+  ++financeFormSession;
   document.getElementById('financeFormBackdrop').classList.remove('open');
 }
 async function saveFinanceForm() {
+  if (financeSaving || !financeTotals) return;
   const errEl = document.getElementById('financeFormError');
   errEl.textContent = '';
-  const fields = {};
-  const q2 = document.getElementById('ffQ2').value;
-  const r2 = document.getElementById('ffR2').value;
-  const s2 = document.getElementById('ffS2').value;
-  if (q2 !== '') fields.Q2 = q2;
-  if (r2 !== '') fields.R2 = r2;
-  if (s2 !== '') fields.S2 = s2;
+  const additions = {};
+  try {
+    FINANCE_FIELDS.forEach(({ key }) => {
+      const amount = financeAddition(key);
+      if (amount > 0) additions[key] = amount;
+    });
+    if (!Object.keys(additions).length) throw new Error('กรุณากรอกยอดที่ต้องการเพิ่มอย่างน้อยหนึ่งรายการ');
+  } catch (err) {
+    errEl.textContent = err.message;
+    return;
+  }
   const saveBtn = document.getElementById('financeFormSave');
-  saveBtn.disabled = true;
+  const cancelBtn = document.getElementById('financeFormCancel');
+  financeSaving = true;
+  setFinanceInputsDisabled(true);
+  cancelBtn.disabled = true;
   saveBtn.textContent = 'กำลังบันทึก...';
   try {
+    // Re-read before adding, so an old open form does not overwrite newer totals.
+    financeTotals = await readCurrentFinance();
+    renderFinanceTotals();
+    const fields = {};
+    Object.keys(additions).forEach(key => {
+      const total = financeTotals[key] + additions[key];
+      if (!Number.isSafeInteger(total)) throw new Error('ยอดรวมสูงเกินไป');
+      fields[key] = total / 100;
+    });
+    // The existing API accepts cumulative totals, so no Apps Script redeployment is needed.
     await callWriteApi('updateStoreFinance', { fields });
+    FINANCE_FIELDS.forEach(({ key }) => { document.getElementById('ff' + key).value = ''; });
+    financeSaving = false;
     closeFinanceForm();
     await loadData();
   } catch (err) {
     errEl.textContent = err.message;
   } finally {
-    saveBtn.disabled = false;
-    saveBtn.textContent = 'บันทึก';
+    financeSaving = false;
+    setFinanceInputsDisabled(false);
+    cancelBtn.disabled = false;
+    saveBtn.textContent = 'บันทึกยอดเพิ่ม';
   }
 }
+FINANCE_FIELDS.forEach(({ key }) => {
+  document.getElementById('ff' + key).addEventListener('input', renderFinanceTotals);
+});
 document.getElementById('editFinanceBtn').addEventListener('click', openFinanceForm);
 document.getElementById('financeFormCancel').addEventListener('click', closeFinanceForm);
 document.getElementById('financeFormSave').addEventListener('click', saveFinanceForm);

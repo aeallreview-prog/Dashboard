@@ -26,9 +26,8 @@
 .follower-summary strong { font-size: 32px; color: var(--blue); margin-right: 8px; }
 .follower-summary span, .follower-summary p { color: var(--muted); font-size: 13px; }
 .follower-summary button { margin-left: auto; }
-.follower-chart { padding: 12px 14px 0; }
-.follower-chart svg { display: block; width: 100%; max-height: 300px; }
 .follower-note { padding: 0 24px 20px; margin: 0; font-size: 12px; color: var(--muted); }
+.follower-note:empty { display: none; }
 
 body {
   margin: 0;

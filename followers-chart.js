@@ -53,9 +53,15 @@ function buildFollowerPoints(rows, range, customRange) {
   let customRange = null;
   let loading = false;
   const dayNumber = date => Date.parse(date + 'T00:00:00+07:00');
-  const today = () => new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit'
-  }).format(new Date());
+  // Use the same rendered SVG width as revenue/profit so labels and strokes scale equally.
+  const referenceChart = document.getElementById('trendSvgHolder');
+  const matchChartSize = () => {
+    const width = referenceChart.getBoundingClientRect().width;
+    if (width > 0) root.style.maxWidth = width + 'px';
+  };
+  const chartSizeObserver = new ResizeObserver(matchChartSize);
+  chartSizeObserver.observe(referenceChart);
+  matchChartSize();
 
   function render() {
     document.getElementById('followerTooltip').style.opacity = '0';
@@ -71,15 +77,9 @@ function buildFollowerPoints(rows, range, customRange) {
     const points = buildFollowerPoints(rows, range, customRange);
     const difference = points.length > 1 ? points[points.length - 1].value - points[0].value : null;
     document.getElementById('followerChange').textContent = difference === null
-      ? 'เริ่มเก็บข้อมูล ' + new Date(rows[0].observedAt).toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok' })
+      ? ''
       : (difference > 0 ? '+' : '') + formatter.format(difference) + ' คน ในช่วงที่เลือก';
-    const observedTime = new Date(latest.observedAt).toLocaleString('th-TH', {
-      timeZone: 'Asia/Bangkok', dateStyle: 'medium', timeStyle: 'short'
-    });
-    note.textContent = 'อ่านจากหน้าโปรไฟล์ล่าสุด ' + observedTime +
-      (latest.date !== today() ? ' · ยังไม่มียอดของวันนี้' : '') +
-      ' · เก็บยอดวันละครั้ง แสดงเฉพาะเวลาที่อ่านได้จริง' +
-      (points.length === 1 ? ' · มีข้อมูล 1 จุดในช่วงนี้ รอข้อมูลเพิ่มเพื่อแสดงเส้นแนวโน้ม' : '');
+    note.textContent = '';
     if (!points.length) {
       root.innerHTML = '<p class="empty">ไม่มีข้อมูลในช่วงที่เลือก</p>';
       return;

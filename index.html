@@ -6,7 +6,7 @@
 <title>seek n tique — แดชบอร์ดยอดขาย</title>
 <link rel="icon" href="logo.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&text=table_chart_view,content_paste_search,calculate,sticky_note_2,chevron_left&display=block" />
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=20260928-match-charts">
 </head>
 <body>
 
@@ -383,19 +383,31 @@
 <div class="settings-backdrop" id="financeFormBackdrop">
   <div class="settings-panel">
     <h3>แก้ไขรายรับ-รายจ่ายร้าน</h3>
-    <p style="margin:0 0 16px;color:var(--muted);font-size:12px;">ค่าที่กรอกเองเพิ่มเติม (Q2/R2/S2) จะถูกรวมเข้ากับยอดรายจ่ายอัตโนมัติ</p>
-    <div class="field"><label>Q1</label><input id="ffQ2" type="number"></div>
-    <div class="field"><label>R1</label><input id="ffR2" type="number"></div>
-    <div class="field"><label>S1</label><input id="ffS2" type="number"></div>
+    <p style="margin:0 0 16px;color:var(--muted);font-size:12px;">กรอกเฉพาะจำนวนที่ต้องการบวกเพิ่มจากยอดปัจจุบัน ช่องที่เว้นว่างจะคงยอดเดิม</p>
+    <div class="field">
+      <label for="ffQ2">เดินทาง · ปัจจุบัน <span id="ffQ2Current">—</span></label>
+      <input id="ffQ2" type="number" min="0" step="0.01" inputmode="decimal" placeholder="จำนวนที่ต้องการเพิ่ม (บาท)" aria-describedby="ffQ2Preview" style="background:#fff;">
+      <small id="ffQ2Preview" aria-live="polite"></small>
+    </div>
+    <div class="field">
+      <label for="ffR2">อุปกรณ์ · ปัจจุบัน <span id="ffR2Current">—</span></label>
+      <input id="ffR2" type="number" min="0" step="0.01" inputmode="decimal" placeholder="จำนวนที่ต้องการเพิ่ม (บาท)" aria-describedby="ffR2Preview" style="background:#fff;">
+      <small id="ffR2Preview" aria-live="polite"></small>
+    </div>
+    <div class="field">
+      <label for="ffS2">ads · ปัจจุบัน <span id="ffS2Current">—</span></label>
+      <input id="ffS2" type="number" min="0" step="0.01" inputmode="decimal" placeholder="จำนวนที่ต้องการเพิ่ม (บาท)" aria-describedby="ffS2Preview" style="background:#fff;">
+      <small id="ffS2Preview" aria-live="polite"></small>
+    </div>
     <p class="login-error" id="financeFormError"></p>
     <div class="settings-actions">
       <button class="ghost" id="financeFormCancel">ยกเลิก</button>
-      <button id="financeFormSave">บันทึก</button>
+      <button id="financeFormSave">บันทึกยอดเพิ่ม</button>
     </div>
   </div>
 </div>
 
-<script src="app.js?v=20260928-follower-ranges"></script>
-<script src="followers-chart.js?v=20260928-follower-ranges"></script>
+<script src="app.js?v=20260928-finance-additions"></script>
+<script src="followers-chart.js?v=20260928-match-charts"></script>
 </body>
 </html>
