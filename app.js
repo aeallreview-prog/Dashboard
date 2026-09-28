@@ -1096,7 +1096,7 @@ function niceCeil(value) {
   return niceFraction * Math.pow(10, exponent);
 }
 
-function buildLineChartSvg(points, colorHex) {
+function buildLineChartSvg(points, colorHex, formatValue = fmtMoney) {
   const W = 560, H = 220, padL = 54, padR = 16, padT = 16, padB = 34;
   const innerW = W - padL - padR, innerH = H - padT - padB;
   const values = points.map(p => p.value);
@@ -1109,11 +1109,20 @@ function buildLineChartSvg(points, colorHex) {
   const xAt = i => padL + stepX * i;
   const yAt = v => padT + innerH - ((v - min) / (max - min)) * innerH;
 
-  const linePts = points.map((p, i) => `${xAt(i).toFixed(1)},${yAt(p.value).toFixed(1)}`).join(' ');
-  const areaPts = `${xAt(0).toFixed(1)},${(padT + innerH).toFixed(1)} ${linePts} ${xAt(points.length - 1).toFixed(1)},${(padT + innerH).toFixed(1)}`;
+  const segments = [];
+  points.forEach((p, i) => {
+    if (!i || p.breakBefore) segments.push([]);
+    segments[segments.length - 1].push({ point: p, index: i });
+  });
+  const paths = segments.map(segment => {
+    const linePts = segment.map(({ point, index }) => `${xAt(index).toFixed(1)},${yAt(point.value).toFixed(1)}`).join(' ');
+    const areaPts = `${xAt(segment[0].index).toFixed(1)},${padT + innerH} ${linePts} ${xAt(segment[segment.length - 1].index).toFixed(1)},${padT + innerH}`;
+    return `<polygon points="${areaPts}" fill="${colorHex}" opacity="0.08"/>
+      <polyline points="${linePts}" fill="none" stroke="${colorHex}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+  }).join('');
 
   const dots = points.map((p, i) =>
-    `<circle class="chart-dot" cx="${xAt(i).toFixed(1)}" cy="${yAt(p.value).toFixed(1)}" r="9" fill="${colorHex}" fill-opacity="0" stroke="${colorHex}" stroke-width="0" data-label="${p.label}" data-value="${fmtMoney(p.value)}"/>` +
+    `<circle class="chart-dot" cx="${xAt(i).toFixed(1)}" cy="${yAt(p.value).toFixed(1)}" r="9" fill="${colorHex}" fill-opacity="0" stroke="${colorHex}" stroke-width="0" data-label="${p.tooltipLabel || p.label}" data-value="${formatValue(p.value)}"/>` +
     `<circle cx="${xAt(i).toFixed(1)}" cy="${yAt(p.value).toFixed(1)}" r="3.5" fill="${colorHex}" style="pointer-events:none"/>`
   ).join('');
 
@@ -1129,14 +1138,13 @@ function buildLineChartSvg(points, colorHex) {
     const val = (max / (TICKS - 1)) * i;
     const y = yAt(val);
     gridlines += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${padL + innerW}" y2="${y.toFixed(1)}" stroke="#e7ebef" stroke-width="1"/>`;
-    gridlines += `<text x="${padL - 8}" y="${(y + 3).toFixed(1)}" font-size="10" fill="#6e7c89" text-anchor="end">${fmtMoney(val)}</text>`;
+    gridlines += `<text x="${padL - 8}" y="${(y + 3).toFixed(1)}" font-size="10" fill="#6e7c89" text-anchor="end">${formatValue(val)}</text>`;
   }
 
   return `
     <svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
       ${gridlines}
-      <polygon points="${areaPts}" fill="${colorHex}" opacity="0.08"/>
-      <polyline points="${linePts}" fill="none" stroke="${colorHex}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+      ${paths}
       ${dots}
       ${labels}
     </svg>
@@ -1198,7 +1206,7 @@ document.getElementById('trendToggle').addEventListener('click', (e) => {
   const btn = e.target.closest('.trend-btn');
   if (!btn) return;
   customRange = null;
-  document.querySelectorAll('.trend-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('#trendToggle .trend-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   trendRange = btn.dataset.range;
   renderTrendChart();
@@ -1213,7 +1221,7 @@ document.getElementById('trendCustomBtn').addEventListener('click', () => {
   const to = new Date(toVal + 'T23:59:59');
   if (from > to) return;
   customRange = { from, to };
-  document.querySelectorAll('.trend-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('#trendToggle .trend-btn').forEach(b => b.classList.remove('active'));
   renderTrendChart();
   renderProfitChart();
 });
@@ -1222,8 +1230,8 @@ document.getElementById('trendResetBtn').addEventListener('click', () => {
   customRange = null;
   document.getElementById('trendFromDate').value = '';
   document.getElementById('trendToDate').value = '';
-  document.querySelectorAll('.trend-btn').forEach(b => b.classList.remove('active'));
-  document.querySelector('.trend-btn[data-range="week"]').classList.add('active');
+  document.querySelectorAll('#trendToggle .trend-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector('#trendToggle .trend-btn[data-range="week"]').classList.add('active');
   trendRange = 'week';
   renderTrendChart();
   renderProfitChart();

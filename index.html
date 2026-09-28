@@ -148,6 +148,41 @@
       </div>
     </div>
 
+    <section class="panel follower-panel" aria-labelledby="followerHeading">
+      <div class="panel-head">
+        <div>
+          <h2 id="followerHeading">แนวโน้มผู้ติดตาม Instagram</h2>
+          <a href="https://www.instagram.com/seek.n.tique/" target="_blank" rel="noopener noreferrer">@seek.n.tique</a>
+        </div>
+        <div class="trend-toggle" id="followerRange" aria-label="ช่วงเวลาผู้ติดตาม">
+          <button class="trend-btn" data-range="minute" aria-pressed="false">นาที</button>
+          <button class="trend-btn" data-range="hour" aria-pressed="false">ชั่วโมง</button>
+          <button class="trend-btn" data-range="day" aria-pressed="false">วัน</button>
+          <button class="trend-btn active" data-range="week" aria-pressed="true">สัปดาห์</button>
+          <button class="trend-btn" data-range="month" aria-pressed="false">เดือน</button>
+          <button class="trend-btn" data-range="year" aria-pressed="false">ปี</button>
+        </div>
+      </div>
+      <div class="follower-summary">
+        <div><strong id="followerCount">—</strong><span>ผู้ติดตาม</span></div>
+        <p id="followerChange"></p>
+        <button class="ghost" id="followerRefresh" type="button">โหลดข้อมูลล่าสุด</button>
+      </div>
+      <div class="trend-custom-range">
+        <label for="followerFromDate">ช่วงที่เลือก:</label>
+        <input type="date" id="followerFromDate">
+        <label for="followerToDate">ถึง</label>
+        <input type="date" id="followerToDate">
+        <button id="followerCustomBtn" type="button">ดูช่วงนี้</button>
+        <button class="trend-reset" id="followerResetBtn" type="button">รีเซ็ต</button>
+      </div>
+      <div class="trend-chart-wrap">
+        <div class="chart-svg-holder" id="followerChart"></div>
+        <div class="chart-tooltip" id="followerTooltip"></div>
+      </div>
+      <p class="follower-note" id="followerNote" role="status">กำลังโหลดข้อมูลผู้ติดตาม…</p>
+    </section>
+
     </div>
 
     <div class="view" id="view-search">
@@ -360,6 +395,7 @@
   </div>
 </div>
 
-<script src="app.js"></script>
+<script src="app.js?v=20260928-follower-ranges"></script>
+<script src="followers-chart.js?v=20260928-follower-ranges"></script>
 </body>
 </html>

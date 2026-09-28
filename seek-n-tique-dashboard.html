@@ -456,6 +456,15 @@ button:disabled { opacity: .55; cursor: wait; }
   .trend-subhead { padding: 16px 14px 0; }
 }
 
+/* Instagram follower history */
+.follower-panel .panel-head a { color: var(--blue); font-size: 13px; }
+.follower-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 0 24px; }
+.follower-summary strong { font-size: 32px; color: var(--blue); margin-right: 8px; }
+.follower-summary span, .follower-summary p { color: var(--muted); font-size: 13px; }
+.follower-summary button { margin-left: auto; }
+.follower-chart { padding: 12px 14px 0; }
+.follower-chart svg { display: block; width: 100%; max-height: 300px; }
+.follower-note { padding: 0 24px 20px; margin: 0; font-size: 12px; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -597,6 +606,41 @@ button:disabled { opacity: .55; cursor: wait; }
         </div>
       </div>
     </div>
+
+    <section class="panel follower-panel" aria-labelledby="followerHeading">
+      <div class="panel-head">
+        <div>
+          <h2 id="followerHeading">แนวโน้มผู้ติดตาม Instagram</h2>
+          <a href="https://www.instagram.com/seek.n.tique/" target="_blank" rel="noopener noreferrer">@seek.n.tique</a>
+        </div>
+        <div class="trend-toggle" id="followerRange" aria-label="ช่วงเวลาผู้ติดตาม">
+          <button class="trend-btn" data-range="minute" aria-pressed="false">นาที</button>
+          <button class="trend-btn" data-range="hour" aria-pressed="false">ชั่วโมง</button>
+          <button class="trend-btn" data-range="day" aria-pressed="false">วัน</button>
+          <button class="trend-btn active" data-range="week" aria-pressed="true">สัปดาห์</button>
+          <button class="trend-btn" data-range="month" aria-pressed="false">เดือน</button>
+          <button class="trend-btn" data-range="year" aria-pressed="false">ปี</button>
+        </div>
+      </div>
+      <div class="follower-summary">
+        <div><strong id="followerCount">—</strong><span>ผู้ติดตาม</span></div>
+        <p id="followerChange"></p>
+        <button class="ghost" id="followerRefresh" type="button">โหลดข้อมูลล่าสุด</button>
+      </div>
+      <div class="trend-custom-range">
+        <label for="followerFromDate">ช่วงที่เลือก:</label>
+        <input type="date" id="followerFromDate">
+        <label for="followerToDate">ถึง</label>
+        <input type="date" id="followerToDate">
+        <button id="followerCustomBtn" type="button">ดูช่วงนี้</button>
+        <button class="trend-reset" id="followerResetBtn" type="button">รีเซ็ต</button>
+      </div>
+      <div class="trend-chart-wrap">
+        <div class="chart-svg-holder" id="followerChart"></div>
+        <div class="chart-tooltip" id="followerTooltip"></div>
+      </div>
+      <p class="follower-note" id="followerNote" role="status">กำลังโหลดข้อมูลผู้ติดตาม…</p>
+    </section>
 
     </div>
 
@@ -1906,7 +1950,7 @@ function niceCeil(value) {
   return niceFraction * Math.pow(10, exponent);
 }
 
-function buildLineChartSvg(points, colorHex) {
+function buildLineChartSvg(points, colorHex, formatValue = fmtMoney) {
   const W = 560, H = 220, padL = 54, padR = 16, padT = 16, padB = 34;
   const innerW = W - padL - padR, innerH = H - padT - padB;
   const values = points.map(p => p.value);
@@ -1919,11 +1963,20 @@ function buildLineChartSvg(points, colorHex) {
   const xAt = i => padL + stepX * i;
   const yAt = v => padT + innerH - ((v - min) / (max - min)) * innerH;
 
-  const linePts = points.map((p, i) => `${xAt(i).toFixed(1)},${yAt(p.value).toFixed(1)}`).join(' ');
-  const areaPts = `${xAt(0).toFixed(1)},${(padT + innerH).toFixed(1)} ${linePts} ${xAt(points.length - 1).toFixed(1)},${(padT + innerH).toFixed(1)}`;
+  const segments = [];
+  points.forEach((p, i) => {
+    if (!i || p.breakBefore) segments.push([]);
+    segments[segments.length - 1].push({ point: p, index: i });
+  });
+  const paths = segments.map(segment => {
+    const linePts = segment.map(({ point, index }) => `${xAt(index).toFixed(1)},${yAt(point.value).toFixed(1)}`).join(' ');
+    const areaPts = `${xAt(segment[0].index).toFixed(1)},${padT + innerH} ${linePts} ${xAt(segment[segment.length - 1].index).toFixed(1)},${padT + innerH}`;
+    return `<polygon points="${areaPts}" fill="${colorHex}" opacity="0.08"/>
+      <polyline points="${linePts}" fill="none" stroke="${colorHex}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+  }).join('');
 
   const dots = points.map((p, i) =>
-    `<circle class="chart-dot" cx="${xAt(i).toFixed(1)}" cy="${yAt(p.value).toFixed(1)}" r="9" fill="${colorHex}" fill-opacity="0" stroke="${colorHex}" stroke-width="0" data-label="${p.label}" data-value="${fmtMoney(p.value)}"/>` +
+    `<circle class="chart-dot" cx="${xAt(i).toFixed(1)}" cy="${yAt(p.value).toFixed(1)}" r="9" fill="${colorHex}" fill-opacity="0" stroke="${colorHex}" stroke-width="0" data-label="${p.tooltipLabel || p.label}" data-value="${formatValue(p.value)}"/>` +
     `<circle cx="${xAt(i).toFixed(1)}" cy="${yAt(p.value).toFixed(1)}" r="3.5" fill="${colorHex}" style="pointer-events:none"/>`
   ).join('');
 
@@ -1939,14 +1992,13 @@ function buildLineChartSvg(points, colorHex) {
     const val = (max / (TICKS - 1)) * i;
     const y = yAt(val);
     gridlines += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${padL + innerW}" y2="${y.toFixed(1)}" stroke="#e7ebef" stroke-width="1"/>`;
-    gridlines += `<text x="${padL - 8}" y="${(y + 3).toFixed(1)}" font-size="10" fill="#6e7c89" text-anchor="end">${fmtMoney(val)}</text>`;
+    gridlines += `<text x="${padL - 8}" y="${(y + 3).toFixed(1)}" font-size="10" fill="#6e7c89" text-anchor="end">${formatValue(val)}</text>`;
   }
 
   return `
     <svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
       ${gridlines}
-      <polygon points="${areaPts}" fill="${colorHex}" opacity="0.08"/>
-      <polyline points="${linePts}" fill="none" stroke="${colorHex}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+      ${paths}
       ${dots}
       ${labels}
     </svg>
@@ -2008,7 +2060,7 @@ document.getElementById('trendToggle').addEventListener('click', (e) => {
   const btn = e.target.closest('.trend-btn');
   if (!btn) return;
   customRange = null;
-  document.querySelectorAll('.trend-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('#trendToggle .trend-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   trendRange = btn.dataset.range;
   renderTrendChart();
@@ -2023,7 +2075,7 @@ document.getElementById('trendCustomBtn').addEventListener('click', () => {
   const to = new Date(toVal + 'T23:59:59');
   if (from > to) return;
   customRange = { from, to };
-  document.querySelectorAll('.trend-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('#trendToggle .trend-btn').forEach(b => b.classList.remove('active'));
   renderTrendChart();
   renderProfitChart();
 });
@@ -2032,8 +2084,8 @@ document.getElementById('trendResetBtn').addEventListener('click', () => {
   customRange = null;
   document.getElementById('trendFromDate').value = '';
   document.getElementById('trendToDate').value = '';
-  document.querySelectorAll('.trend-btn').forEach(b => b.classList.remove('active'));
-  document.querySelector('.trend-btn[data-range="week"]').classList.add('active');
+  document.querySelectorAll('#trendToggle .trend-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector('#trendToggle .trend-btn[data-range="week"]').classList.add('active');
   trendRange = 'week';
   renderTrendChart();
   renderProfitChart();
@@ -2461,5 +2513,6 @@ if (isAlreadyLoggedIn()) {
 }
 
 </script>
+<script src="followers-chart.js?v=20260928-follower-ranges"></script>
 </body>
 </html>
