@@ -2,8 +2,6 @@
 function buildFollowerPoints(rows, range, customRange) {
   const DAY = 86400000;
   const formats = {
-    minute: { hour: '2-digit', minute: '2-digit' },
-    hour: { hour: '2-digit', minute: '2-digit' },
     day: { day: '2-digit', month: '2-digit' },
     week: { day: '2-digit', month: '2-digit' },
     month: { month: 'short', year: '2-digit' },
@@ -17,8 +15,6 @@ function buildFollowerPoints(rows, range, customRange) {
     const day = Math.floor(local.getTime() / DAY);
     let bucket;
     switch (range) {
-      case 'minute': bucket = Math.floor(local.getTime() / 60000); break;
-      case 'hour': bucket = Math.floor(local.getTime() / 3600000); break;
       case 'day': bucket = day; break;
       case 'month': bucket = local.getUTCFullYear() * 12 + local.getUTCMonth(); break;
       case 'year': bucket = local.getUTCFullYear(); break;

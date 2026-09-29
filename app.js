@@ -1005,8 +1005,6 @@ const CHART_POINTS = 8; // number of columns shown on the x-axis, for every rang
 
 function monthKey(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
 function yearKey(d) { return String(d.getFullYear()); }
-function hourKey(d) { return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate() + '-' + d.getHours(); }
-function minuteKey(d) { return hourKey(d) + '-' + d.getMinutes(); }
 function mondayOf(d) {
   const day = d.getDay(); // 0=Sun..6=Sat
   const diff = (day === 0 ? -6 : 1) - day;
@@ -1036,8 +1034,6 @@ function buildSeries(metric) {
 }
 
 const RANGE_CONFIGS = {
-  minute: { key: minuteKey, fmt: { hour: '2-digit', minute: '2-digit' }, isTime: true },
-  hour:   { key: hourKey,   fmt: { hour: '2-digit', minute: '2-digit' }, isTime: true },
   day:    { key: dayKey,    fmt: { day: '2-digit', month: '2-digit' }, isTime: false },
   week:   { key: weekKey,   fmt: { day: '2-digit', month: '2-digit' }, isTime: false },
   month:  { key: monthKey,  fmt: { month: 'short', year: '2-digit' }, isTime: false },
@@ -1059,8 +1055,7 @@ function pointsForCustomRange(series, from, to, range) {
   const c = RANGE_CONFIGS[range] || RANGE_CONFIGS.week;
   const label = d => c.isTime ? d.toLocaleTimeString('th-TH', c.fmt) : d.toLocaleDateString('th-TH', c.fmt);
 
-  // group by the currently-selected granularity (day/hour/week/...) within the
-  // chosen date range, so "วัน" gives one point per day, "ชั่วโมง" one per hour, etc.
+  // Group by the selected day/week/month/year interval within the date range.
   const grouped = lastPerGroup(filtered, c.key);
 
   if (grouped.length <= CUSTOM_RANGE_MAX_POINTS) {
