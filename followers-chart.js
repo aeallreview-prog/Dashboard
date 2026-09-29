@@ -18,7 +18,7 @@ function buildFollowerPoints(rows, range, customRange) {
       case 'day': bucket = day; break;
       case 'month': bucket = local.getUTCFullYear() * 12 + local.getUTCMonth(); break;
       case 'year': bucket = local.getUTCFullYear(); break;
-      default: bucket = Math.floor((day + 3) / 7); // Monday starts the week.
+      default: bucket = Math.floor((day + 4) / 7); // Sunday starts the Bangkok week.
     }
     const old = grouped.get(bucket);
     if (!old || time >= old.time) grouped.set(bucket, { row, time, bucket });
@@ -38,16 +38,53 @@ function buildFollowerPoints(rows, range, customRange) {
   }));
 }
 
+function followerThaiDate(time = Date.now()) {
+  return new Date(time + 7 * 3600000).toISOString().slice(0, 10);
+}
+
+function followerWeekStart(time = Date.now()) {
+  const date = new Date(followerThaiDate(time) + 'T00:00:00Z');
+  date.setUTCDate(date.getUTCDate() - date.getUTCDay());
+  return date.toISOString().slice(0, 10);
+}
+
+function mergeFollowerHistory(seed, manual) {
+  const byDate = new Map();
+  [...seed, ...manual].forEach(row => {
+    if (!row || !/^\d{4}-\d{2}-\d{2}$/.test(row.date) ||
+        !Number.isSafeInteger(row.count) || row.count < 1 || row.count > 1000000000 ||
+        !Number.isFinite(Date.parse(row.observedAt)) ||
+        followerThaiDate(Date.parse(row.observedAt)) !== row.date) return;
+    byDate.set(row.date, row);
+  });
+  return Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function followerWeekMissing(rows, time = Date.now()) {
+  const start = followerWeekStart(time);
+  const today = followerThaiDate(time);
+  return !rows.some(row => row.source === 'manual' && row.date >= start && row.date <= today);
+}
+
 (() => {
   const root = document.getElementById('followerChart');
   if (!root) return;
   const note = document.getElementById('followerNote');
   const refresh = document.getElementById('followerRefresh');
+  const form = document.getElementById('followerForm');
+  const input = document.getElementById('followerInput');
+  const save = document.getElementById('followerSave');
+  const saveStatus = document.getElementById('followerSaveStatus');
+  const reminder = document.getElementById('followerReminder');
   const formatter = new Intl.NumberFormat('th-TH', { maximumFractionDigits: 0 });
   let rows = [];
   let range = 'week';
   let customRange = null;
   let loading = false;
+  let saving = false;
+  let historyReady = false;
+  let seedRows = [];
+  let manualRows = [];
   const dayNumber = date => Date.parse(date + 'T00:00:00+07:00');
   // Use the same rendered SVG width as revenue/profit so labels and strokes scale equally.
   const referenceChart = document.getElementById('trendSvgHolder');
@@ -59,7 +96,25 @@ function buildFollowerPoints(rows, range, customRange) {
   chartSizeObserver.observe(referenceChart);
   matchChartSize();
 
+  function updateReminder() {
+    reminder.hidden = !historyReady || !followerWeekMissing(rows);
+    reminder.textContent = 'สัปดาห์นี้ยังไม่ได้กรอกยอดผู้ติดตาม — เปิด IG ดูยอดล่าสุด แล้วกรอกด้านล่าง (อาทิตย์–เสาร์)';
+  }
+
+  function updateControls() {
+    refresh.disabled = loading || saving;
+    save.disabled = !historyReady || loading || saving;
+    input.disabled = saving;
+    save.textContent = saving ? 'กำลังบันทึก…' : 'บันทึกยอด';
+  }
+
+  function showSaveStatus(message, error = false) {
+    saveStatus.textContent = message;
+    saveStatus.dataset.error = String(error);
+  }
+
   function render() {
+    updateReminder();
     document.getElementById('followerTooltip').style.opacity = '0';
     if (!rows.length) {
       root.innerHTML = '';
@@ -93,37 +148,90 @@ function buildFollowerPoints(rows, range, customRange) {
     attachChartTooltip(root, document.getElementById('followerTooltip'));
   }
 
-  function loadHistory() {
-    if (loading) return;
-    loading = true;
-    refresh.disabled = true;
-    const script = document.createElement('script');
-    script.src = 'followers-history.js?v=' + Date.now();
-    script.onload = () => {
-      const data = window.SNT_FOLLOWER_HISTORY;
-      const byTime = new Map();
-      if (data && data.username === 'seek.n.tique' && Array.isArray(data.observations)) {
-        data.observations.forEach(row => {
-          if (!row || !/^\d{4}-\d{2}-\d{2}$/.test(row.date) || !Number.isInteger(row.count) || row.count < 0 ||
-              !Number.isFinite(dayNumber(row.date)) || !Number.isFinite(Date.parse(row.observedAt))) return;
-          byTime.set(Date.parse(row.observedAt), row);
-        });
+  function loadSeedHistory() {
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      const timer = setTimeout(() => finish(new Error('โหลดประวัติเดิมหมดเวลา')), 15000);
+      script.src = 'followers-history.js?v=' + Date.now();
+      script.onload = () => {
+        const data = window.SNT_FOLLOWER_HISTORY;
+        if (!data || data.username !== 'seek.n.tique' || !Array.isArray(data.observations)) {
+          finish(new Error('รูปแบบประวัติเดิมไม่ถูกต้อง'));
+          return;
+        }
+        seedRows = mergeFollowerHistory(data.observations, []);
+        finish();
+      };
+      script.onerror = () => finish(new Error('โหลดประวัติเดิมไม่ได้'));
+      function finish(error) {
+        clearTimeout(timer);
+        script.onload = script.onerror = null;
+        script.remove();
+        if (error) reject(error); else resolve();
       }
-      rows = Array.from(byTime.values()).sort((a, b) => Date.parse(a.observedAt) - Date.parse(b.observedAt));
-      render();
-      finish();
-    };
-    script.onerror = () => {
-      note.textContent = 'โหลดประวัติผู้ติดตามไม่ได้ กรุณาลองโหลดข้อมูลล่าสุดอีกครั้ง';
-      finish();
-    };
-    function finish() {
-      loading = false;
-      refresh.disabled = false;
-      script.remove();
-    }
-    document.head.appendChild(script);
+      document.head.appendChild(script);
+    });
   }
+
+  async function loadHistory() {
+    if (loading || saving) return;
+    loading = true;
+    historyReady = false;
+    updateControls();
+    updateReminder();
+    let seedError = false;
+    try {
+      await loadSeedHistory().catch(() => { seedError = true; });
+      const data = await callWriteApi('getFollowerHistory', {});
+      if (!data || !Array.isArray(data.observations)) throw new Error('รูปแบบประวัติไม่ถูกต้อง');
+      manualRows = mergeFollowerHistory([], data.observations);
+      historyReady = true;
+      rows = mergeFollowerHistory(seedRows, manualRows);
+      render();
+      note.textContent = seedError ? 'โหลดข้อมูลที่กรอกเองแล้ว แต่โหลดประวัติเดิมไม่ได้ กรุณาลองโหลดอีกครั้ง' : '';
+    } catch (error) {
+      rows = mergeFollowerHistory(seedRows, manualRows);
+      render();
+      note.textContent = 'ยังเชื่อมต่อประวัติที่กรอกเองไม่ได้ ข้อมูลที่เห็นอาจไม่ใช่ล่าสุด — กรุณาอัปเดต Apps Script ให้รองรับผู้ติดตาม แล้วกดโหลดข้อมูลล่าสุด';
+    } finally {
+      loading = false;
+      updateControls();
+    }
+  }
+
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (saving || loading || !historyReady) return;
+    const raw = input.value.trim();
+    const count = Number(raw);
+    if (!raw || !/^\d+$/.test(raw) || !Number.isSafeInteger(count) || count < 1 || count > 1000000000) {
+      showSaveStatus('กรุณากรอกยอดทั้งหมดเป็นจำนวนเต็มตั้งแต่ 1 ถึง 1,000,000,000', true);
+      return;
+    }
+    saving = true;
+    updateControls();
+    showSaveStatus('');
+    try {
+      const data = await callWriteApi('saveFollowerCount', { count });
+      if (!data || !Array.isArray(data.observations) || data.count !== count ||
+          !data.observations.some(row => row.date === data.savedDate && row.count === count && row.source === 'manual')) {
+        throw new Error('ยังยืนยันผลบันทึกไม่ได้ กรุณาโหลดข้อมูลล่าสุดเพื่อตรวจสอบก่อนลองอีกครั้ง');
+      }
+      manualRows = mergeFollowerHistory([], data.observations);
+      rows = mergeFollowerHistory(seedRows, manualRows);
+      range = 'day';
+      clearDates();
+      updateButtons();
+      render();
+      input.value = '';
+      showSaveStatus('บันทึก ' + formatter.format(count) + ' คน ลง Google Sheet แล้ว');
+    } catch (error) {
+      showSaveStatus('บันทึกไม่สำเร็จ: ' + error.message, true);
+    } finally {
+      saving = false;
+      updateControls();
+    }
+  });
   function updateButtons() {
     document.querySelectorAll('#followerRange button').forEach(item => {
       item.classList.toggle('active', item.dataset.range === range);
@@ -159,5 +267,10 @@ function buildFollowerPoints(rows, range, customRange) {
     render();
   });
   refresh.addEventListener('click', loadHistory);
+  // Re-check the week even when the dashboard stays open across Sunday midnight.
+  setInterval(updateReminder, 60000);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) loadHistory();
+  });
   loadHistory();
 })();

@@ -1005,15 +1005,12 @@ const CHART_POINTS = 8; // number of columns shown on the x-axis, for every rang
 
 function monthKey(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
 function yearKey(d) { return String(d.getFullYear()); }
-function mondayOf(d) {
-  const day = d.getDay(); // 0=Sun..6=Sat
-  const diff = (day === 0 ? -6 : 1) - day;
-  const monday = new Date(d);
-  monday.setDate(d.getDate() + diff);
-  monday.setHours(0, 0, 0, 0);
-  return monday;
+function weekKey(d) {
+  // Sunday–Saturday in Bangkok, independent of the viewer's device timezone.
+  const local = new Date(d.getTime() + 7 * 3600000);
+  local.setUTCDate(local.getUTCDate() - local.getUTCDay());
+  return local.toISOString().slice(0, 10);
 }
-function weekKey(d) { return mondayOf(d).toISOString().slice(0, 10); }
 function dayKey(d) { return d.toISOString().slice(0, 10); }
 
 function lastPerGroup(series, keyFn) {

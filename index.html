@@ -6,7 +6,7 @@
 <title>seek n tique — แดชบอร์ดยอดขาย</title>
 <link rel="icon" href="logo.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&text=table_chart_view,content_paste_search,calculate,sticky_note_2,chevron_left&display=block" />
-<link rel="stylesheet" href="style.css?v=20260928-match-charts">
+<link rel="stylesheet" href="style.css?v=20260929-manual-followers">
 </head>
 <body>
 
@@ -177,6 +177,18 @@
         <div class="chart-tooltip" id="followerTooltip"></div>
       </div>
       <p class="follower-note" id="followerNote" role="status">กำลังโหลดข้อมูลผู้ติดตาม…</p>
+      <div class="follower-manual">
+        <p class="follower-reminder" id="followerReminder" role="status" hidden></p>
+        <form id="followerForm">
+          <label for="followerInput">ยอดผู้ติดตามที่อ่านได้วันนี้</label>
+          <div class="follower-form-row">
+            <input id="followerInput" type="number" min="1" max="1000000000" step="1" inputmode="numeric" placeholder="กรอกยอดทั้งหมด เช่น 355" required aria-describedby="followerInputHint">
+            <button id="followerSave" type="submit" disabled>บันทึกยอด</button>
+          </div>
+          <p id="followerInputHint">กรอกยอดทั้งหมด ไม่ใช่จำนวนที่เพิ่ม · บันทึกวันที่ปัจจุบันตามเวลาไทย หากกรอกซ้ำวันนี้จะใช้ยอดล่าสุด</p>
+          <p id="followerSaveStatus" role="status" aria-live="polite"></p>
+        </form>
+      </div>
     </section>
 
     </div>
@@ -403,7 +415,7 @@
   </div>
 </div>
 
-<script src="app.js?v=20260929-chart-ranges"></script>
-<script src="followers-chart.js?v=20260929-chart-ranges"></script>
+<script src="app.js?v=20260929-sunday-weeks"></script>
+<script src="followers-chart.js?v=20260929-sunday-weeks"></script>
 </body>
 </html>

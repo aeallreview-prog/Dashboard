@@ -47,6 +47,10 @@ function doPost(e) {
       updateStoreFinance(sheet, body.fields || {});
     } else if (body.action === 'deleteProduct') {
       deleteProductRow(sheet, body.no);
+    } else if (body.action === 'getFollowerHistory') {
+      result = { observations: readFollowerHistory(ss) };
+    } else if (body.action === 'saveFollowerCount') {
+      result = saveFollowerCount(ss, body.count);
     } else {
       throw new Error('unknown action: ' + body.action);
     }
@@ -60,6 +64,49 @@ function doPost(e) {
 function jsonOutput(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+// Manual follower history is isolated from all product and finance cells.
+var FOLLOWER_SHEET_NAME = 'FollowerHistory';
+
+function readFollowerHistory(ss) {
+  var history = ss.getSheetByName(FOLLOWER_SHEET_NAME);
+  if (!history || history.getLastRow() < 2) return [];
+  return history.getRange(2, 1, history.getLastRow() - 1, 4).getValues().map(function (row) {
+    var date = row[0] instanceof Date
+      ? Utilities.formatDate(row[0], 'Asia/Bangkok', 'yyyy-MM-dd') : String(row[0]);
+    var observedAt = row[2] instanceof Date ? row[2].toISOString() : String(row[2]);
+    return { date: date, count: row[1], observedAt: observedAt, source: String(row[3]) };
+  });
+}
+
+function saveFollowerCount(ss, count) {
+  if (typeof count !== 'number' || !isFinite(count) || Math.floor(count) !== count || count < 1 || count > 1000000000) {
+    throw new Error('กรุณากรอกยอดผู้ติดตามเป็นจำนวนเต็มตั้งแต่ 1 ถึง 1,000,000,000');
+  }
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var now = new Date();
+    var date = Utilities.formatDate(now, 'Asia/Bangkok', 'yyyy-MM-dd');
+    var history = ss.getSheetByName(FOLLOWER_SHEET_NAME);
+    if (!history) {
+      history = ss.insertSheet(FOLLOWER_SHEET_NAME);
+      history.appendRow(['Date', 'Count', 'ObservedAt', 'Source']);
+      history.setFrozenRows(1);
+    }
+    var observations = readFollowerHistory(ss);
+    var existing = observations.findIndex(function (row) { return row.date === date; });
+    var targetRow = existing < 0 ? history.getLastRow() + 1 : existing + 2;
+    // Preserve date and timestamp as text regardless of spreadsheet locale.
+    history.getRange(targetRow, 1).setNumberFormat('@');
+    history.getRange(targetRow, 3, 1, 2).setNumberFormat('@');
+    history.getRange(targetRow, 1, 1, 4).setValues([[date, count, now.toISOString(), 'manual']]);
+    SpreadsheetApp.flush();
+    return { observations: readFollowerHistory(ss), savedDate: date, count: count };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function findRowByNo(sheet, no) {

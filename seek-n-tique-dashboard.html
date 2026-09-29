@@ -464,6 +464,17 @@ button:disabled { opacity: .55; cursor: wait; }
 .follower-summary button { margin-left: auto; }
 .follower-note { padding: 0 24px 20px; margin: 0; font-size: 12px; color: var(--muted); }
 .follower-note:empty { display: none; }
+.follower-manual { margin: 0 24px 24px; padding-top: 18px; border-top: 1px solid var(--line); }
+.follower-reminder { background: #fff5eb; border-left: 4px solid var(--accent); border-radius: 10px; padding: 12px 14px; color: var(--ink); font-size: 13px; }
+.follower-manual label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+.follower-form-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.follower-form-row input { flex: 1 1 180px; min-width: 0; max-width: 320px; padding: 11px 12px; background: #fff; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); font: inherit; }
+.follower-form-row button { background: var(--blue); color: #fff; padding: 11px 18px; border: 0; border-radius: 10px; font: inherit; cursor: pointer; }
+.follower-form-row button:disabled { opacity: .5; cursor: not-allowed; }
+.follower-form-row input:focus-visible, .follower-form-row button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#followerInputHint, #followerSaveStatus { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+#followerSaveStatus[data-error="true"] { color: #b42318; }
+#followerSaveStatus:empty { display: none; }
 </style>
 </head>
 <body>
@@ -635,6 +646,18 @@ button:disabled { opacity: .55; cursor: wait; }
         <div class="chart-tooltip" id="followerTooltip"></div>
       </div>
       <p class="follower-note" id="followerNote" role="status">กำลังโหลดข้อมูลผู้ติดตาม…</p>
+      <div class="follower-manual">
+        <p class="follower-reminder" id="followerReminder" role="status" hidden></p>
+        <form id="followerForm">
+          <label for="followerInput">ยอดผู้ติดตามที่อ่านได้วันนี้</label>
+          <div class="follower-form-row">
+            <input id="followerInput" type="number" min="1" max="1000000000" step="1" inputmode="numeric" placeholder="กรอกยอดทั้งหมด เช่น 355" required aria-describedby="followerInputHint">
+            <button id="followerSave" type="submit" disabled>บันทึกยอด</button>
+          </div>
+          <p id="followerInputHint">กรอกยอดทั้งหมด ไม่ใช่จำนวนที่เพิ่ม · บันทึกวันที่ปัจจุบันตามเวลาไทย หากกรอกซ้ำวันนี้จะใช้ยอดล่าสุด</p>
+          <p id="followerSaveStatus" role="status" aria-live="polite"></p>
+        </form>
+      </div>
     </section>
 
     </div>
@@ -1866,15 +1889,12 @@ const CHART_POINTS = 8; // number of columns shown on the x-axis, for every rang
 
 function monthKey(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
 function yearKey(d) { return String(d.getFullYear()); }
-function mondayOf(d) {
-  const day = d.getDay(); // 0=Sun..6=Sat
-  const diff = (day === 0 ? -6 : 1) - day;
-  const monday = new Date(d);
-  monday.setDate(d.getDate() + diff);
-  monday.setHours(0, 0, 0, 0);
-  return monday;
+function weekKey(d) {
+  // Sunday–Saturday in Bangkok, independent of the viewer's device timezone.
+  const local = new Date(d.getTime() + 7 * 3600000);
+  local.setUTCDate(local.getUTCDate() - local.getUTCDay());
+  return local.toISOString().slice(0, 10);
 }
-function weekKey(d) { return mondayOf(d).toISOString().slice(0, 10); }
 function dayKey(d) { return d.toISOString().slice(0, 10); }
 
 function lastPerGroup(series, keyFn) {
@@ -2621,6 +2641,6 @@ if (isAlreadyLoggedIn()) {
 }
 
 </script>
-<script src="followers-chart.js?v=20260929-chart-ranges"></script>
+<script src="followers-chart.js?v=20260929-sunday-weeks"></script>
 </body>
 </html>
