@@ -1972,14 +1972,15 @@ function niceCeil(value) {
   return niceFraction * Math.pow(10, exponent);
 }
 
-function buildLineChartSvg(points, colorHex, formatValue = fmtMoney) {
+function buildLineChartSvg(points, colorHex, formatValue = fmtMoney, axis = null) {
   const W = 560, H = 220, padL = 54, padR = 16, padT = 16, padB = 34;
   const innerW = W - padL - padR, innerH = H - padT - padB;
   const values = points.map(p => p.value);
   const dataMax = Math.max(...values, 0);
-  const max = niceCeil(dataMax === 0 ? 1 : dataMax);
-  const min = 0;
-  const TICKS = 6; // ~6 evenly spaced price levels from 0 to max
+  const max = axis ? axis.max : niceCeil(dataMax === 0 ? 1 : dataMax);
+  const min = axis ? axis.min : 0;
+  const TICKS = axis ? axis.ticks : 6;
+  const clipId = axis ? 'chart-range-' + (buildLineChartSvg.clipSequence = (buildLineChartSvg.clipSequence || 0) + 1) : null;
 
   const stepX = points.length > 1 ? innerW / (points.length - 1) : 0;
   const xAt = i => padL + stepX * i;
@@ -2008,10 +2009,10 @@ function buildLineChartSvg(points, colorHex, formatValue = fmtMoney) {
     return `<text x="${xAt(i).toFixed(1)}" y="${H - 10}" font-size="10" fill="#6e7c89" text-anchor="middle">${p.label}</text>`;
   }).join('');
 
-  // horizontal gridlines + labels, evenly spaced 0..max in TICKS steps
+  // Horizontal gridlines and labels span the selected axis limits.
   let gridlines = '';
   for (let i = 0; i < TICKS; i++) {
-    const val = (max / (TICKS - 1)) * i;
+    const val = min + ((max - min) / (TICKS - 1)) * i;
     const y = yAt(val);
     gridlines += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${padL + innerW}" y2="${y.toFixed(1)}" stroke="#e7ebef" stroke-width="1"/>`;
     gridlines += `<text x="${padL - 8}" y="${(y + 3).toFixed(1)}" font-size="10" fill="#6e7c89" text-anchor="end">${formatValue(val)}</text>`;
@@ -2020,8 +2021,7 @@ function buildLineChartSvg(points, colorHex, formatValue = fmtMoney) {
   return `
     <svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
       ${gridlines}
-      ${paths}
-      ${dots}
+      ${axis ? `<defs><clipPath id="${clipId}"><rect x="${padL - 10}" y="${padT}" width="${innerW + 20}" height="${innerH}"/></clipPath></defs><g clip-path="url(#${clipId})">${paths}${dots}</g>` : paths + dots}
       ${labels}
     </svg>
   `;
@@ -2641,6 +2641,6 @@ if (isAlreadyLoggedIn()) {
 }
 
 </script>
-<script src="followers-chart.js?v=20260929-sunday-weeks"></script>
+<script src="followers-chart.js?v=20261002-follower-axis"></script>
 </body>
 </html>

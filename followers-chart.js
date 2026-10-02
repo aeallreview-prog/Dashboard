@@ -135,7 +135,7 @@ function followerWeekMissing(rows, time = Date.now()) {
       root.innerHTML = '<p class="empty">ไม่มีข้อมูลในช่วงที่เลือก</p>';
       return;
     }
-    root.innerHTML = buildLineChartSvg(points, '#1a63a8', value => formatter.format(value));
+    root.innerHTML = buildLineChartSvg(points, '#1a63a8', value => formatter.format(value), { min: 300, max: 500, ticks: 5 });
     const svg = root.querySelector('svg');
     svg.setAttribute('role', 'img');
     svg.setAttribute('aria-label', 'แนวโน้มผู้ติดตาม Instagram ในช่วงที่เลือก ' + points.length + ' จุดข้อมูล');
