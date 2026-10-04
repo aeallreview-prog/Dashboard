@@ -1890,9 +1890,9 @@ const CHART_POINTS = 8; // number of columns shown on the x-axis, for every rang
 function monthKey(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
 function yearKey(d) { return String(d.getFullYear()); }
 function weekKey(d) {
-  // Sunday–Saturday in Bangkok, independent of the viewer's device timezone.
+  // Monday–Sunday in Bangkok, independent of the viewer's device timezone.
   const local = new Date(d.getTime() + 7 * 3600000);
-  local.setUTCDate(local.getUTCDate() - local.getUTCDay());
+  local.setUTCDate(local.getUTCDate() - (local.getUTCDay() + 6) % 7);
   return local.toISOString().slice(0, 10);
 }
 function dayKey(d) { return d.toISOString().slice(0, 10); }
@@ -1959,28 +1959,36 @@ function getPoints(series) {
   return aggregateHistory(series, trendRange);
 }
 
-// round a value up to a "nice" number (1/2/5 × 10^n) for clean axis labels
-function niceCeil(value) {
-  if (value <= 0) return 1;
-  const exponent = Math.floor(Math.log10(value));
-  const fraction = value / Math.pow(10, exponent);
-  let niceFraction;
-  if (fraction <= 1) niceFraction = 1;
-  else if (fraction <= 2) niceFraction = 2;
-  else if (fraction <= 5) niceFraction = 5;
-  else niceFraction = 10;
-  return niceFraction * Math.pow(10, exponent);
+function chartValueRange(points) {
+  const values = points.map(p => p.value).filter(Number.isFinite);
+  if (!values.length) return { min: 0, max: 1, ticks: [0, 1] };
+  let min = Math.min(...values);
+  let max = Math.max(...values);
+  const integers = values.every(Number.isInteger);
+  // A flat series still needs a non-zero range to draw a visible horizontal line.
+  if (min === max) {
+    const padding = Math.max(1, Math.ceil(Math.abs(min) * 0.01));
+    min -= padding;
+    max += padding;
+  }
+  const ticks = [...new Set(Array.from({ length: 6 }, (_, i) => {
+    if (i === 0) return min;
+    if (i === 5) return max;
+    const value = min + ((max - min) / 5) * i;
+    return integers ? Math.round(value) : Number(value.toFixed(2));
+  }))].filter(value => value >= min && value <= max);
+  return { min, max, ticks };
 }
 
-function buildLineChartSvg(points, colorHex, formatValue = fmtMoney, axis = null) {
+function fmtChartMoney(value) {
+  return '฿' + Number(value).toLocaleString('th-TH', { maximumFractionDigits: 2 });
+}
+
+function buildLineChartSvg(points, colorHex, formatValue = fmtChartMoney) {
   const W = 560, H = 220, padL = 54, padR = 16, padT = 16, padB = 34;
   const innerW = W - padL - padR, innerH = H - padT - padB;
-  const values = points.map(p => p.value);
-  const dataMax = Math.max(...values, 0);
-  const max = axis ? axis.max : niceCeil(dataMax === 0 ? 1 : dataMax);
-  const min = axis ? axis.min : 0;
-  const TICKS = axis ? axis.ticks : 6;
-  const clipId = axis ? 'chart-range-' + (buildLineChartSvg.clipSequence = (buildLineChartSvg.clipSequence || 0) + 1) : null;
+  // Scale only to the points in the currently displayed range, not all history.
+  const { min, max, ticks } = chartValueRange(points);
 
   const stepX = points.length > 1 ? innerW / (points.length - 1) : 0;
   const xAt = i => padL + stepX * i;
@@ -2011,8 +2019,7 @@ function buildLineChartSvg(points, colorHex, formatValue = fmtMoney, axis = null
 
   // Horizontal gridlines and labels span the selected axis limits.
   let gridlines = '';
-  for (let i = 0; i < TICKS; i++) {
-    const val = min + ((max - min) / (TICKS - 1)) * i;
+  for (const val of ticks) {
     const y = yAt(val);
     gridlines += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${padL + innerW}" y2="${y.toFixed(1)}" stroke="#e7ebef" stroke-width="1"/>`;
     gridlines += `<text x="${padL - 8}" y="${(y + 3).toFixed(1)}" font-size="10" fill="#6e7c89" text-anchor="end">${formatValue(val)}</text>`;
@@ -2021,7 +2028,8 @@ function buildLineChartSvg(points, colorHex, formatValue = fmtMoney, axis = null
   return `
     <svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
       ${gridlines}
-      ${axis ? `<defs><clipPath id="${clipId}"><rect x="${padL - 10}" y="${padT}" width="${innerW + 20}" height="${innerH}"/></clipPath></defs><g clip-path="url(#${clipId})">${paths}${dots}</g>` : paths + dots}
+      ${paths}
+      ${dots}
       ${labels}
     </svg>
   `;
@@ -2641,6 +2649,6 @@ if (isAlreadyLoggedIn()) {
 }
 
 </script>
-<script src="followers-chart.js?v=20261002-follower-axis"></script>
+<script src="followers-chart.js?v=20261004-auto-range"></script>
 </body>
 </html>

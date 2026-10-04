@@ -18,7 +18,7 @@ function buildFollowerPoints(rows, range, customRange) {
       case 'day': bucket = day; break;
       case 'month': bucket = local.getUTCFullYear() * 12 + local.getUTCMonth(); break;
       case 'year': bucket = local.getUTCFullYear(); break;
-      default: bucket = Math.floor((day + 4) / 7); // Sunday starts the Bangkok week.
+      default: bucket = Math.floor((day + 3) / 7); // Monday starts the Bangkok week.
     }
     const old = grouped.get(bucket);
     if (!old || time >= old.time) grouped.set(bucket, { row, time, bucket });
@@ -44,7 +44,7 @@ function followerThaiDate(time = Date.now()) {
 
 function followerWeekStart(time = Date.now()) {
   const date = new Date(followerThaiDate(time) + 'T00:00:00Z');
-  date.setUTCDate(date.getUTCDate() - date.getUTCDay());
+  date.setUTCDate(date.getUTCDate() - (date.getUTCDay() + 6) % 7);
   return date.toISOString().slice(0, 10);
 }
 
@@ -98,7 +98,7 @@ function followerWeekMissing(rows, time = Date.now()) {
 
   function updateReminder() {
     reminder.hidden = !historyReady || !followerWeekMissing(rows);
-    reminder.textContent = 'สัปดาห์นี้ยังไม่ได้กรอกยอดผู้ติดตาม — เปิด IG ดูยอดล่าสุด แล้วกรอกด้านล่าง (อาทิตย์–เสาร์)';
+    reminder.textContent = 'สัปดาห์นี้ยังไม่ได้กรอกยอดผู้ติดตาม — เปิด IG ดูยอดล่าสุด แล้วกรอกด้านล่าง (จันทร์–อาทิตย์)';
   }
 
   function updateControls() {
@@ -135,7 +135,7 @@ function followerWeekMissing(rows, time = Date.now()) {
       root.innerHTML = '<p class="empty">ไม่มีข้อมูลในช่วงที่เลือก</p>';
       return;
     }
-    root.innerHTML = buildLineChartSvg(points, '#1a63a8', value => formatter.format(value), { min: 300, max: 500, ticks: 5 });
+    root.innerHTML = buildLineChartSvg(points, '#1a63a8', value => formatter.format(value));
     const svg = root.querySelector('svg');
     svg.setAttribute('role', 'img');
     svg.setAttribute('aria-label', 'แนวโน้มผู้ติดตาม Instagram ในช่วงที่เลือก ' + points.length + ' จุดข้อมูล');
@@ -267,7 +267,7 @@ function followerWeekMissing(rows, time = Date.now()) {
     render();
   });
   refresh.addEventListener('click', loadHistory);
-  // Re-check the week even when the dashboard stays open across Sunday midnight.
+  // Re-check the week even when the dashboard stays open across Monday midnight.
   setInterval(updateReminder, 60000);
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) loadHistory();
