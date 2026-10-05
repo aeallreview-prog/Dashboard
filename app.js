@@ -950,8 +950,8 @@ document.getElementById('settingsSave').addEventListener('click', () => {
   startPolling();
 });
 
-// ---------- trend charts (revenue + profit) ----------
-let historyRows = []; // [{date, revenue, profit}], sorted ascending
+// ---------- trend charts (revenue + profit + expense) ----------
+let historyRows = []; // [{date, revenue, profit, expense}], sorted ascending
 let trendRange = 'week';
 let customRange = null; // { from: Date, to: Date } | null — overrides trendRange when set
 
@@ -989,15 +989,18 @@ async function loadRevenueHistory() {
       const date = parseGvizDate(r.c && r.c[0]);
       const revenue = cellNumber(r.c && r.c[1]);
       const profit = cellNumber(r.c && r.c[2]);
-      return date ? { date, revenue, profit } : null;
+      const expense = cellNumber(r.c && r.c[3]);
+      return date ? { date, revenue, profit, expense } : null;
     }).filter(Boolean).sort((a, b) => a.date - b.date);
     renderTrendChart();
     renderProfitChart();
+    renderExpenseChart();
   } catch (err) {
     console.warn('revenue history not available yet:', err.message);
     const emptyMsg = '<p class="empty">ยังไม่มีข้อมูลย้อนหลัง — ต้องตั้งค่า Apps Script ให้บันทึกก่อน (ดู README)</p>';
     document.getElementById('trendSvgHolder').innerHTML = emptyMsg;
     document.getElementById('profitSvgHolder').innerHTML = emptyMsg;
+    document.getElementById('expenseSvgHolder').innerHTML = emptyMsg;
   }
 }
 
@@ -1024,7 +1027,7 @@ function lastPerGroup(series, keyFn) {
 }
 
 function buildSeries(metric) {
-  // metric: 'revenue' | 'profit'
+  // metric: 'revenue' | 'profit' | 'expense'
   return historyRows
     .filter(r => r[metric] !== null && r[metric] !== undefined)
     .map(r => ({ date: r.date, value: r[metric] }));
@@ -1201,6 +1204,9 @@ function renderTrendChart() {
 function renderProfitChart() {
   renderChart('profit', 'profitSvgHolder', 'profitTooltip', '#f15e22', 'กำไร');
 }
+function renderExpenseChart() {
+  renderChart('expense', 'expenseSvgHolder', 'expenseTooltip', '#dc2626', 'รายจ่าย');
+}
 
 document.getElementById('trendToggle').addEventListener('click', (e) => {
   const btn = e.target.closest('.trend-btn');
@@ -1211,6 +1217,7 @@ document.getElementById('trendToggle').addEventListener('click', (e) => {
   trendRange = btn.dataset.range;
   renderTrendChart();
   renderProfitChart();
+  renderExpenseChart();
 });
 
 document.getElementById('trendCustomBtn').addEventListener('click', () => {
@@ -1224,6 +1231,7 @@ document.getElementById('trendCustomBtn').addEventListener('click', () => {
   document.querySelectorAll('#trendToggle .trend-btn').forEach(b => b.classList.remove('active'));
   renderTrendChart();
   renderProfitChart();
+  renderExpenseChart();
 });
 
 document.getElementById('trendResetBtn').addEventListener('click', () => {
@@ -1235,6 +1243,7 @@ document.getElementById('trendResetBtn').addEventListener('click', () => {
   trendRange = 'week';
   renderTrendChart();
   renderProfitChart();
+  renderExpenseChart();
 });
 
 // ---------- message templates ----------
