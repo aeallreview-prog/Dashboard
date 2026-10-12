@@ -43,6 +43,35 @@ let config = loadConfig();
 let pollTimer = null;
 let lastRows = null;   // full row data from the most recent successful fetch
 let lastHeaders = [];  // header labels taken from sheet row 1
+let dataLoadSequence = 0;
+let latestFinanceObservedAt = 0;
+let draftFinanceRevision = 0;
+
+// The API reads product totals and active drafts under the same lock as transfers.
+// Never mix a cached T2/V2 response with a draft list from another instant.
+function applyDraftFinance(finance) {
+  if (!finance || !['revenue', 'expense', 'profit', 'draftCost'].every(key => Number.isFinite(finance[key]))) {
+    throw new Error('ยอดรวมต้นทุนยังไม่พร้อม กรุณาตรวจสูตร T2/U2/V2 และ Apps Script');
+  }
+  const observedAt = Date.parse(finance.observedAt);
+  if (!Number.isFinite(observedAt)) throw new Error('ไม่พบเวลาที่อ่านยอดรวมต้นทุน');
+  if (observedAt < latestFinanceObservedAt) return;
+  latestFinanceObservedAt = observedAt;
+  draftFinanceRevision += 1;
+  document.getElementById('revenueVal').textContent = fmtChartMoney(finance.revenue);
+  document.getElementById('expenseVal').textContent = fmtChartMoney(finance.expense);
+  document.getElementById('profitVal').textContent = fmtChartMoney(finance.profit);
+  const note = document.getElementById('draftFinanceStatus');
+  note.textContent = `รวมต้นทุนแบบร่าง ${fmtChartMoney(finance.draftCost)} ในรายจ่ายและกำไรแล้ว`;
+  note.classList.remove('is-error');
+}
+
+function showDraftFinanceError(err) {
+  ['revenueVal', 'expenseVal', 'profitVal'].forEach(id => { document.getElementById(id).textContent = '–'; });
+  const note = document.getElementById('draftFinanceStatus');
+  note.textContent = 'ยังยืนยันยอดรวมแบบร่างไม่ได้: ' + err.message;
+  note.classList.add('is-error');
+}
 
 // ---------- helpers ----------
 function colToIndex(letter) {
@@ -613,26 +642,18 @@ function renderProductTable() {
 
 // ---------- main fetch ----------
 async function loadData() {
+  const sequence = ++dataLoadSequence;
   document.getElementById('refreshBtn').disabled = true;
   setStatus('', 'กำลังอัปเดต...');
   try {
     const res = await fetch(buildUrl(config), { cache: 'no-store' });
     if (!res.ok) throw new Error('เชื่อมต่อ Google Sheet ไม่สำเร็จ (HTTP ' + res.status + ')');
     const text = await res.text();
+    if (sequence !== dataLoadSequence) return;
     const table = parseGviz(text);
     const rows = table.rows || [];
     lastRows = rows;
     lastHeaders = (rows[0] && rows[0].c) ? rows[0].c.map(c => cellText(c)) : [];
-
-    // Revenue / expense / profit from fixed cells U2 / T2 / V2 (row index 1)
-    const rowTwo = rows[1];
-    const revenue = cellNumber(rowTwo && rowTwo.c && rowTwo.c[colToIndex('U')]);
-    const expense = cellNumber(rowTwo && rowTwo.c && rowTwo.c[colToIndex('T')]);
-    const profit = cellNumber(rowTwo && rowTwo.c && rowTwo.c[colToIndex('V')]);
-
-    document.getElementById('revenueVal').textContent = fmtMoney(revenue);
-    document.getElementById('expenseVal').textContent = fmtMoney(expense);
-    document.getElementById('profitVal').textContent = fmtMoney(profit);
 
     // Status column: manual override, or auto-detect once and cache it
     // (re-scanning every column × every row on every 1-minute poll is wasted work
@@ -667,6 +688,13 @@ async function loadData() {
     setStatus('live', 'เชื่อมต่อสำเร็จ');
     const now = new Date();
     document.getElementById('lastUpdated').textContent = 'อัปเดตล่าสุด ' + now.toLocaleTimeString('th-TH');
+    const financeRevision = draftFinanceRevision;
+    try {
+      if (!window.SNTDrafts) throw new Error('กรุณาโหลดหน้าเว็บใหม่เพื่อใช้ระบบแบบร่าง');
+      await window.SNTDrafts.refresh();
+    } catch (err) {
+      if (sequence === dataLoadSequence && financeRevision === draftFinanceRevision) showDraftFinanceError(err);
+    }
   } catch (err) {
     console.error(err);
     setStatus('error', 'เชื่อมต่อไม่สำเร็จ');
@@ -944,16 +972,41 @@ document.getElementById('settingsSave').addEventListener('click', () => {
     webAppUrl: document.getElementById('cfgWebAppUrl').value.trim(),
   };
   cachedAutoStatusCol = null; // sheet/column settings changed — re-detect once, fresh
+  latestFinanceObservedAt = 0;
+  if (window.SNTDrafts) window.SNTDrafts.resetForConfig();
+  savedFinanceSnapshots = [];
+  historyRows = [];
   saveConfig(config);
   closeSettings();
   loadData();
+  loadRevenueHistory();
   startPolling();
 });
 
 // ---------- trend charts (revenue + profit + expense) ----------
 let historyRows = []; // [{date, revenue, profit, expense}], sorted ascending
+let savedFinanceSnapshots = []; // Actual saved observations; protects against the public feed's cache lag.
 let trendRange = 'week';
 let customRange = null; // { from: Date, to: Date } | null — overrides trendRange when set
+
+function mergeFinanceHistory(rows) {
+  const merged = new Map();
+  [...rows, ...savedFinanceSnapshots].forEach(row => merged.set(row.date.getTime(), row));
+  return [...merged.values()].sort((a, b) => a.date - b.date);
+}
+
+function addFinanceSnapshot(snapshot) {
+  if (!snapshot) return;
+  const date = new Date(snapshot.date);
+  if (isNaN(date) || !['revenue', 'expense', 'profit'].every(key => Number.isFinite(snapshot[key]))) return;
+  const row = { date, revenue: snapshot.revenue, expense: snapshot.expense, profit: snapshot.profit };
+  savedFinanceSnapshots = savedFinanceSnapshots.filter(item => item.date.getTime() !== date.getTime());
+  savedFinanceSnapshots.push(row);
+  historyRows = mergeFinanceHistory(historyRows);
+  renderTrendChart();
+  renderProfitChart();
+  renderExpenseChart();
+}
 
 function buildHistoryUrl(cfg) {
   const base = `https://docs.google.com/spreadsheets/d/${cfg.sheetId}/gviz/tq?tqx=out:json&headers=1&sheet=RevenueHistory`;
@@ -985,18 +1038,25 @@ async function loadRevenueHistory() {
     const text = await res.text();
     const table = parseGviz(text);
     const rows = table.rows || [];
-    historyRows = rows.map(r => {
+    historyRows = mergeFinanceHistory(rows.map(r => {
       const date = parseGvizDate(r.c && r.c[0]);
       const revenue = cellNumber(r.c && r.c[1]);
       const profit = cellNumber(r.c && r.c[2]);
       const expense = cellNumber(r.c && r.c[3]);
       return date ? { date, revenue, profit, expense } : null;
-    }).filter(Boolean).sort((a, b) => a.date - b.date);
+    }).filter(Boolean));
     renderTrendChart();
     renderProfitChart();
     renderExpenseChart();
   } catch (err) {
     console.warn('revenue history not available yet:', err.message);
+    if (savedFinanceSnapshots.length) {
+      historyRows = mergeFinanceHistory(historyRows);
+      renderTrendChart();
+      renderProfitChart();
+      renderExpenseChart();
+      return;
+    }
     const emptyMsg = '<p class="empty">ยังไม่มีข้อมูลย้อนหลัง — ต้องตั้งค่า Apps Script ให้บันทึกก่อน (ดู README)</p>';
     document.getElementById('trendSvgHolder').innerHTML = emptyMsg;
     document.getElementById('profitSvgHolder').innerHTML = emptyMsg;
@@ -1006,15 +1066,15 @@ async function loadRevenueHistory() {
 
 const CHART_POINTS = 8; // number of columns shown on the x-axis, for every range
 
-function monthKey(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
-function yearKey(d) { return String(d.getFullYear()); }
+function monthKey(d) { return dayKey(d).slice(0, 7); }
+function yearKey(d) { return dayKey(d).slice(0, 4); }
 function weekKey(d) {
   // Monday–Sunday in Bangkok, independent of the viewer's device timezone.
   const local = new Date(d.getTime() + 7 * 3600000);
   local.setUTCDate(local.getUTCDate() - (local.getUTCDay() + 6) % 7);
   return local.toISOString().slice(0, 10);
 }
-function dayKey(d) { return d.toISOString().slice(0, 10); }
+function dayKey(d) { return new Date(d.getTime() + 7 * 3600000).toISOString().slice(0, 10); }
 
 function lastPerGroup(series, keyFn) {
   const map = new Map();
@@ -1190,8 +1250,8 @@ function renderChart(metric, holderId, tooltipId, colorHex, emptyLabel) {
     return;
   }
   const points = getPoints(series);
-  if (points.length < 2) {
-    holder.innerHTML = '<p class="empty">มีข้อมูลแค่จุดเดียว รอรอบถัดไปให้กราฟขึ้นเส้นได้</p>';
+  if (!points.length) {
+    holder.innerHTML = '<p class="empty">ไม่มีข้อมูลในช่วงวันที่เลือก</p>';
     return;
   }
   holder.innerHTML = buildLineChartSvg(points, colorHex);
@@ -1329,12 +1389,21 @@ function populateStatusSelect(selectEl, currentVal) {
 // ---------- edit / add product modal ----------
 let productFormMode = 'edit'; // 'edit' | 'add'
 let productFormNo = null;
+let productSaving = false;
 
 const DEFAULT_CLOSING_NOTE = `สินค้าเป็นของสะสม อาจมีร่องรอยตามกาลเวลา โดยทางเราได้ลงภาพรายละเอียดไว้ในอัลบั้มข้างต้น
 #artglass #แก้ว #เครื่องครัวญี่ปุ่น #ของมือสองญี่ปุ่น #ของมือสอง`;
 
 function computeNextProductNo() {
-  return getAllProductRows().length + 1;
+  if (!lastRows) return 1;
+  const editable = ['P', 'C', 'E', 'F', 'H', 'I', 'J', 'K', 'O', 'B', 'D', 'M', 'N'].map(colToIndex);
+  for (let row = 2; row < lastRows.length; row++) {
+    if (editable.every(col => {
+      const cell = lastRows[row].c && lastRows[row].c[col];
+      return !cell || cell.v === null || cell.v === undefined || cell.v === '';
+    })) return row - 1;
+  }
+  return Math.max(1, lastRows.length - 1);
 }
 
 function resetTemplateBuilder() {
@@ -1474,8 +1543,10 @@ function showProductForm() {
 }
 
 function openEditProductModal(noVal) {
+  if (productSaving) return;
   const row = findRowByNo(noVal);
   if (!row) return;
+  if (window.SNTDrafts) window.SNTDrafts.resetProductForm(false);
   productFormMode = 'edit';
   productFormNo = noVal;
   document.getElementById('productFormTitle').textContent = `แก้ไขสินค้า No. ${noVal}`;
@@ -1497,6 +1568,8 @@ function openEditProductModal(noVal) {
 }
 
 function openAddProductModal() {
+  if (productSaving) return;
+  if (window.SNTDrafts) window.SNTDrafts.resetProductForm(true);
   productFormMode = 'add';
   productFormNo = null;
   document.getElementById('productFormTitle').textContent = 'เพิ่มสินค้าใหม่';
@@ -1511,10 +1584,12 @@ function openAddProductModal() {
 }
 
 function closeProductForm() {
+  if (productSaving) return;
   document.getElementById('productFormBackdrop').classList.remove('open');
 }
 
 async function saveProductForm() {
+  if (productSaving) return;
   const errEl = document.getElementById('productFormError');
   errEl.textContent = '';
   const rawFields = {
@@ -1537,25 +1612,41 @@ async function saveProductForm() {
   });
 
   const saveBtn = document.getElementById('productFormSave');
+  productSaving = true;
+  document.getElementById('productFormCancel').disabled = true;
+  document.getElementById('productFormDelete').disabled = true;
+  if (window.SNTDrafts) window.SNTDrafts.setProductBusy(true);
   saveBtn.disabled = true;
   saveBtn.textContent = 'กำลังบันทึก...';
   try {
+    let result;
     if (productFormMode === 'edit') {
-      await callWriteApi('updateProduct', { no: productFormNo, fields });
+      result = await callWriteApi('updateProduct', { no: productFormNo, fields });
     } else {
-      await callWriteApi('addProduct', { fields });
+      const selection = window.SNTDrafts ? window.SNTDrafts.getProductSelection() : {};
+      result = await callWriteApi('addProduct', { fields, ...selection });
     }
-    closeProductForm();
+    // A saved product must not be submitted again just because a subsequent refresh fails.
+    document.getElementById('productFormBackdrop').classList.remove('open');
+    if (window.SNTDrafts && result && result.finance) {
+      try { window.SNTDrafts.onProductSaved(result); } catch (err) { showDraftFinanceError(err); }
+    }
     await loadData();
+    await loadRevenueHistory();
   } catch (err) {
     errEl.textContent = err.message;
   } finally {
+    productSaving = false;
+    document.getElementById('productFormCancel').disabled = false;
+    document.getElementById('productFormDelete').disabled = false;
+    if (window.SNTDrafts) window.SNTDrafts.setProductBusy(false);
     saveBtn.disabled = false;
     saveBtn.textContent = 'บันทึก';
   }
 }
 
 async function deleteProductFromForm() {
+  if (productSaving) return;
   const errEl = document.getElementById('productFormError');
   errEl.textContent = '';
   const confirmed = confirm(`ยืนยันลบข้อมูลสินค้า No. ${productFormNo}?\nข้อมูลในแถวนี้จะถูกล้างทั้งหมด (กู้คืนไม่ได้)`);
