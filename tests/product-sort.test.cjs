@@ -88,7 +88,10 @@ function makeHarness() {
     fetch() { throw new Error('Sorting must not make a network request'); },
   });
   const run = code => vm.runInContext(code, context);
-  for (const name of ['colToIndex', 'cellText', 'cellNumber', 'rowHasProduct']) run(extractFunction(source, name));
+  for (const name of ['colToIndex', 'cellText', 'cellNumber', 'rowHasProduct', 'getProductProfitPercent']) run(extractFunction(source, name));
+  const percentColumn = source.match(/const PROFIT_PERCENT_COL = [^;]+;/);
+  assert.ok(percentColumn, 'Missing production percentage column constant');
+  run(percentColumn[0]);
   run(tableSection(source));
   // Table pagination and controls are real; simple row markup makes row order observable.
   run(`renderProductTableRow = row => '<tr data-no="' + cellText(row.c[0]) + '"></tr>'`);
@@ -147,6 +150,63 @@ test('profit uses L and sale revenue uses H, never G or the status column', () =
   assert.deepEqual(h.ids(), ['b', 'a', 'c']);
   h.sort('H');
   assert.deepEqual(h.ids(), ['b', 'c', 'a']);
+});
+
+test('G sorts cost-based profit percentages from E and H, not stored G, asking price F, net profit L, or status', () => {
+  const h = makeHarness();
+  h.setRows([
+    product('gain', { E: 100, H: 150, G: -999, F: 5, L: -999 }),
+    product('loss', { E: 100, H: 50, G: 999, F: 9000, L: 999 }, 'ขายหมดแล้ว'),
+    product('even', { E: 100, H: 100, G: 800, F: 8000, L: 800 }),
+    product('same-percent', { E: 200, H: 300, G: 700, F: 7000, L: 700 }),
+    product('best-percent', { E: 10, H: 30, G: 600, F: 6000, L: 600 }),
+  ]);
+  const original = JSON.stringify(h.context.lastRows);
+  const originalRefs = h.context.lastRows.slice();
+  h.sort('G', 'desc');
+  assert.deepEqual(h.ids(), ['best-percent', 'gain', 'same-percent', 'even', 'loss']);
+  h.sort('G', 'asc');
+  assert.deepEqual(h.ids(), ['loss', 'even', 'gain', 'same-percent', 'best-percent']);
+  assert.equal(JSON.stringify(h.context.lastRows), original);
+  assert.ok(h.context.lastRows.every((row, i) => row === originalRefs[i]));
+  h.sort('none');
+  assert.deepEqual(h.ids(), ['gain', 'loss', 'even', 'same-percent', 'best-percent']);
+});
+
+test('unavailable profit percentages stay last in both directions, with zero percent treated as a valid value', () => {
+  const h = makeHarness();
+  const unavailable = [
+    product('not-sold', { E: 100, H: 0, G: 900 }),
+    product('no-sale', { E: 100, G: 800 }),
+    product('zero-cost', { E: 0, H: 150 }),
+    product('negative-cost', { E: -100, H: 150 }),
+    product('negative-sale', { E: 100, H: -50 }),
+    product('cost-error', { E: '#DIV/0!', H: 150 }),
+    product('sale-error', { E: 100, H: '#N/A' }),
+    product('overflow', { E: Number.MIN_VALUE, H: Number.MAX_VALUE }),
+    product('infinity', { E: 100, H: Infinity }),
+  ];
+  h.setRows([product('zero', { E: 100, H: 100 }), ...unavailable,
+    product('loss', { E: 100, H: 50 }), product('gain', { E: 100, H: 200 })]);
+  const unavailableIds = unavailable.map(row => row.c[0].v);
+  h.sort('G', 'asc');
+  assert.deepEqual(h.ids(), ['loss', 'zero', 'gain', ...unavailableIds]);
+  h.sort('G', 'desc');
+  assert.deepEqual(h.ids(), ['gain', 'zero', 'loss', ...unavailableIds]);
+});
+
+test('percentage sorting uses full precision and strict numeric inputs rather than rounded display text', () => {
+  const h = makeHarness();
+  h.setRows([
+    product('lower-rounded', { E: 100, H: { v: 150.001, f: '150' } }),
+    product('higher-rounded', { E: 100, H: { v: 150.004, f: '150' } }),
+    product('formatted-half', { E: { v: '฿ 1,200.50' }, H: { v: '1,800.75 บาท' } }),
+    product('formatted-double', { E: { v: null, f: '100 บาท' }, H: { f: '฿200' } }),
+  ]);
+  h.sort('G', 'desc');
+  assert.deepEqual(h.ids(), ['formatted-double', 'higher-rounded', 'lower-rounded', 'formatted-half']);
+  h.sort('G', 'asc');
+  assert.deepEqual(h.ids(), ['formatted-half', 'lower-rounded', 'higher-rounded', 'formatted-double']);
 });
 
 test('raw numeric values win over display rounding and currency/formatted fallbacks remain numeric', () => {
@@ -236,6 +296,23 @@ test('status filtering and global sorting happen before ten-item pagination on e
   assert.deepEqual(h.renderedIds(), expected.slice(20));
 });
 
+test('percentage sorting respects status filtering and sorts all pages globally before pagination', () => {
+  const h = makeHarness();
+  const rows = Array.from({ length: 26 }, (_, i) => product(i + 1,
+    { E: 100, H: 101 + i, G: 100 - i }, (i + 1) % 5 ? 'ลงขายแล้ว' : 'ขายหมดแล้ว'));
+  h.setRows(rows);
+  h.run(`productStatusFilterVal = 'ลงขายแล้ว'`);
+  h.sort('G', 'desc');
+  const expected = rows.filter(row => row.c[14].v === 'ลงขายแล้ว').map(row => row.c[0].v).reverse();
+  h.run('renderProductTable()');
+  assert.deepEqual(h.renderedIds(), expected.slice(0, 10));
+  h.run('changeProductPage(2)');
+  assert.deepEqual(h.renderedIds(), expected.slice(10, 20));
+  h.run('changeProductPage(3)');
+  assert.deepEqual(h.renderedIds(), expected.slice(20));
+  assert.match(h.get('productPagination').innerHTML, /21 รายการ/);
+});
+
 test('sort controls initialize and bind once, with changes staged until Apply commits both values', () => {
   const h = makeHarness();
   h.setRows(Array.from({ length: 23 }, (_, i) => product(i + 1, { F: (23 - i) * 10 })));
@@ -305,8 +382,8 @@ test('reset stages original order and only Apply restores it and restarts pagina
   assert.equal(h.get('productSortMenu').open, false);
 });
 
-test('Apply validates field and direction, and rejects the old G profit mapping', () => {
-  for (const field of ['G', 'invalid', '']) {
+test('Apply validates unknown fields and directions', () => {
+  for (const field of ['invalid', '']) {
     const h = makeHarness();
     h.setRows([product('a', { L: 10 }), product('b', { L: 20 })]);
     h.sort('L', 'desc');
@@ -318,6 +395,38 @@ test('Apply validates field and direction, and rejects the old G profit mapping'
     assert.equal(h.run('productSortDirectionVal'), 'desc');
     assert.deepEqual(h.renderedIds(), ['a', 'b']);
   }
+});
+
+test('the percentage option stays pending until Apply, then labels and marks G while leaving L as money', () => {
+  const h = makeHarness();
+  h.setRows(Array.from({ length: 12 }, (_, i) => product(i + 1, { E: 100, H: 101 + i, G: 1000 - i, L: 1000 - i })));
+  h.sort('L', 'desc');
+  h.run('hideSensitiveData = false; renderProductTable(); changeProductPage(2)');
+  const previousRows = h.renderedIds();
+  const previousHead = h.get('productTableHead').innerHTML;
+  const previousLabel = h.get('productSortToggle').attributes['aria-label'];
+  h.get('productSortMenu').open = true;
+  h.get('productSortField').value = 'G';
+  h.get('productSortField').emit('change');
+  h.get('productSortDirection').value = 'desc';
+  h.get('productSortDirection').emit('change');
+  assert.equal(h.run('productSortFieldVal'), 'L');
+  assert.equal(h.run('productPage'), 2);
+  assert.deepEqual(h.renderedIds(), previousRows);
+  assert.equal(h.get('productTableHead').innerHTML, previousHead);
+  assert.equal(h.get('productSortToggle').attributes['aria-label'], previousLabel);
+  h.run('renderProductTable()');
+  assert.equal(h.get('productSortField').value, 'G', 'Refresh retains the pending percentage selection');
+  assert.deepEqual(h.renderedIds(), previousRows);
+  h.get('productSortApply').emit('click');
+  assert.equal(h.run('productSortFieldVal'), 'G');
+  assert.equal(h.run('productPage'), 1);
+  assert.deepEqual(h.renderedIds(), ['12', '11', '10', '9', '8', '7', '6', '5', '4', '3']);
+  assert.match(h.get('productSortToggle').attributes['aria-label'], /กำไร \(%\)/);
+  assert.match(h.get('productTableHead').innerHTML, /<th scope="col" aria-sort="descending">6<\/th>/);
+  assert.match(h.get('productTableHead').innerHTML, /<th scope="col">11<\/th>/);
+  assert.equal(h.get('productSortMenu').open, false);
+  assert.equal(h.focusedNode(), h.get('productSortToggle'));
 });
 
 test('compact sort icon changes its active state and accessible labels only after Apply', () => {
@@ -473,6 +582,23 @@ test('sorting hidden monetary data does not reveal columns or change the visibil
   assert.deepEqual(h.renderedIds(), ['b', 'a']);
 });
 
+test('sorting percentages preserves the sensitive-data setting and does not expose financial columns', () => {
+  const h = makeHarness();
+  h.setRows([product('a', { E: 100, H: 110 }), product('b', { E: 100, H: 150 })]);
+  h.sort('G', 'desc');
+  h.run('renderProductTable()');
+  assert.deepEqual(h.renderedIds(), ['b', 'a']);
+  assert.equal(h.run('hideSensitiveData'), true);
+  assert.equal(h.get('hideSensitiveCheckbox').checked, true);
+  assert.deepEqual(Array.from(h.run('getVisibleCols()')), [0, 15, 2, 5, 14]);
+  assert.doesNotMatch(h.get('productTableHead').innerHTML, /aria-sort/);
+  h.get('hideSensitiveCheckbox').checked = false;
+  h.get('hideSensitiveCheckbox').emit('change');
+  assert.equal(h.run('productSortFieldVal'), 'G');
+  assert.deepEqual(h.renderedIds(), ['b', 'a']);
+  assert.match(h.get('productTableHead').innerHTML, /<th scope="col" aria-sort="descending">6<\/th>/);
+});
+
 test('loading and empty states tolerate active sorting', () => {
   const h = makeHarness();
   h.sort('E', 'asc');
@@ -494,7 +620,7 @@ test('both entry points expose the same uniquely identified sort fields and dire
     for (const id of ['productSortMenu', 'productSortToggle', 'productSortControls', 'productSortField', 'productSortDirection', 'productSortReset', 'productSortApply']) {
       assert.equal((html.match(new RegExp(`\\bid="${id}"`, 'g')) || []).length, 1, `${name}: unique ${id}`);
     }
-    for (const [id, expected] of [['productSortField', ['none', 'E', 'F', 'L', 'H']], ['productSortDirection', ['desc', 'asc']]]) {
+    for (const [id, expected] of [['productSortField', ['none', 'E', 'F', 'L', 'G', 'H']], ['productSortDirection', ['desc', 'asc']]]) {
       const select = html.match(new RegExp(`<select\\b[^>]*id="${id}"[^>]*>([\\s\\S]*?)<\\/select>`));
       assert.ok(select, `${name}: ${id} select`);
       assert.deepEqual(Array.from(select[1].matchAll(/<option\b[^>]*value="([^"]+)"/g), match => match[1]), expected);
@@ -503,6 +629,7 @@ test('both entry points expose the same uniquely identified sort fields and dire
     assert.match(html, /<button\b[^>]*id="productSortReset"[^>]*type="button"|<button\b[^>]*type="button"[^>]*id="productSortReset"/, `${name}: reset must not submit`);
     assert.match(html, /<button\b[^>]*id="productSortApply"[^>]*type="button"[^>]*>\s*เลือก\s*<\/button>|<button\b[^>]*type="button"[^>]*id="productSortApply"[^>]*>\s*เลือก\s*<\/button>/, `${name}: explicit Apply button must not submit`);
     assert.match(html, /<option\b[^>]*value="L"[^>]*>[^<]*กำไรของ[^<]*<\/option>/, `${name}: profit option maps to column L`);
+    assert.match(html, /<option\b[^>]*value="G"[^>]*>\s*กำไร \(%\)\s*<\/option>/, `${name}: percentage option maps to calculated column G`);
   }
 });
 

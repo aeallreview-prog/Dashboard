@@ -248,7 +248,7 @@ const COLUMN_LABEL_OVERRIDES = {
   A: 'No.',
   E: 'ต้นทุนของ',
   F: 'ราคาขาย',
-  G: 'กำไรของ',
+  G: 'กำไร (%)',
   H: 'ขายแล้ว',
   I: 'ค่าส่งจากลูกค้า',
   J: 'ค่าส่งจริง',
@@ -260,6 +260,7 @@ const COLUMN_LABEL_OVERRIDES = {
 const IMAGE_COL = colToIndex('P');
 const DETAIL_COL = colToIndex('C'); // detail/description column - shown wider
 const PRICE_COL = colToIndex('F'); // ราคาขาย - green highlight
+const PROFIT_PERCENT_COL = colToIndex('G'); // display cost-based return from E and H
 const STATUS_DISPLAY_COL = colToIndex('O'); // สถานะ - colored like the donut chart
 // Only these columns are shown in the search result, in this exact order.
 const DISPLAY_COLS = ['A', 'P', 'C', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'O'].map(colToIndex);
@@ -270,6 +271,27 @@ function headerLabel(colIdx) {
   const raw = lastHeaders[colIdx];
   return raw && raw.trim() ? raw.trim() : `คอลัมน์ ${letter}`;
 }
+
+function getProductProfitPercent(row) {
+  const cost = getProductSortValue(row, colToIndex('E'));
+  const sold = getProductSortValue(row, colToIndex('H'));
+  if (cost === null || sold === null || cost <= 0 || sold <= 0) return null;
+  const percent = (sold - cost) / cost * 100;
+  return Number.isFinite(percent) ? percent : null;
+}
+
+function formatProductProfitPercent(row) {
+  const percent = getProductProfitPercent(row);
+  if (percent === null) return '—';
+  // Show break-even as 0%, including values that round to zero.
+  return (Math.abs(percent) < 0.005 ? 0 : percent).toLocaleString('th-TH', { maximumFractionDigits: 2 }) + '%';
+}
+
+function getProductDisplayText(row, columnIndex) {
+  // Derived for display only: keep the sheet's G value and all baht totals intact.
+  return columnIndex === PROFIT_PERCENT_COL ? formatProductProfitPercent(row) : cellText(row.c && row.c[columnIndex]);
+}
+
 function looksLikeImageUrl(text) {
   return /^https?:\/\/\S+/i.test(text);
 }
@@ -388,8 +410,7 @@ function renderSearchResult(row) {
   let fields = '';
 
   DISPLAY_COLS.forEach(i => {
-    const cell = row.c && row.c[i];
-    const rawText = cellText(cell);
+    const rawText = getProductDisplayText(row, i);
     const text = rawText || '-';
 
     if (i === IMAGE_COL) {
@@ -471,7 +492,7 @@ function doSearch() {
 const PRODUCT_PAGE_SIZE = 10;
 let productPage = 1;
 let productStatusFilterVal = 'all';
-const PRODUCT_SORT_COLS = ['E', 'F', 'L', 'H'];
+const PRODUCT_SORT_COLS = ['E', 'F', 'L', 'G', 'H'];
 let productSortFieldVal = 'none';
 let productSortDirectionVal = 'desc';
 let hideSensitiveData = true; // default: sensitive columns hidden
@@ -520,7 +541,7 @@ function populateProductSortControls() {
   const menu = document.getElementById('productSortMenu');
   const toggle = document.getElementById('productSortToggle');
   const active = productSortFieldVal !== 'none';
-  const sortLabels = { E: 'ต้นทุนของ', F: 'ราคาขาย', L: 'กำไรของ', H: 'ขายแล้ว' };
+  const sortLabels = { E: 'ต้นทุนของ', F: 'ราคาขาย', L: 'กำไรของ', G: 'กำไร (%)', H: 'ขายแล้ว' };
   const description = active ? 'เรียงสินค้า: ' + sortLabels[productSortFieldVal] + ' ' + (productSortDirectionVal === 'asc' ? 'น้อยไปมาก' : 'มากไปน้อย') : 'เรียงสินค้า';
   menu.dataset.active = String(active);
   toggle.title = description;
@@ -589,7 +610,11 @@ function getFilteredProductRows() {
   const column = colToIndex(productSortFieldVal);
   const direction = productSortDirectionVal === 'asc' ? 1 : -1;
   // Sort all matching products before pagination, never mutate the sheet-order array.
-  return rows.map((row, index) => ({ row, index, value: getProductSortValue(row, column) }))
+  return rows.map((row, index) => ({
+    row, index,
+    // Percentage sorting uses the unrounded E/H calculation, never the old sheet G.
+    value: column === PROFIT_PERCENT_COL ? getProductProfitPercent(row) : getProductSortValue(row, column),
+  }))
     .sort((a, b) => {
       if (a.value === null && b.value !== null) return 1;
       if (a.value !== null && b.value === null) return -1;
@@ -624,7 +649,7 @@ function renderProductTableRow(row) {
   }
 
   const cells = visibleCols.map(i => {
-    const rawText = cellText(row.c && row.c[i]);
+    const rawText = getProductDisplayText(row, i);
     const text = rawText || '-';
     if (i === IMAGE_COL) {
       return looksLikeImageUrl(rawText)
