@@ -120,7 +120,7 @@
       return '<button type="button" class="draft-choice' + (active ? ' selected' : '') + '" data-draft-select="' + escapeHtml(draft.id) + '" aria-pressed="' + Boolean(active) + '">' +
         '<span class="draft-choice-image">' + imageMarkup(draft.image, draftLabel(draft)) + '</span>' +
         '<span><span>' + escapeHtml(draftLabel(draft)) + '</span><strong>' + money(draft.cost) + '</strong></span></button>';
-    }).join('') : '<p class="product-draft-note">ยังไม่มีแบบร่างให้เลือก เพิ่มรูปและต้นทุนในหน้า “สินค้าแบบร่าง” ก่อน</p>';
+    }).join('') : '<p class="product-draft-note">ยังไม่มีแบบร่างให้เลือก เพิ่มรูปและต้นทุนในหน้า “Draft” ก่อน</p>';
     attachImageErrors(picker);
     renderControls();
   }
