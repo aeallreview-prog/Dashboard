@@ -437,18 +437,27 @@ button:disabled { opacity: .55; cursor: wait; }
 .draft-feedback { margin: 0 24px 18px; color: var(--blue); font-size: 13px; line-height: 1.6; }
 .draft-feedback:empty { display: none; }
 .draft-feedback[data-error="true"] { color: #b42318; }
-.draft-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(175px, 1fr)); gap: 16px; padding: 0 24px 24px; }
-.draft-grid > .empty { grid-column: 1 / -1; }
-.draft-card { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; min-width: 0; }
-.draft-card-image { width: 100%; aspect-ratio: 4 / 3; background: #f8f9fa; display: grid; place-items: center; overflow: hidden; }
-.draft-card-image img { width: 100%; height: 100%; object-fit: contain; }
-.draft-card-body { padding: 14px; }
-.draft-card-body > p { margin: 0 0 6px; color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
-.draft-card-body > strong { color: var(--blue); font-size: 20px; }
-.draft-card-actions { margin-top: 14px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
-.draft-card-actions button { font-size: 11px; padding: 7px 10px; }
-.draft-card-actions .draft-delete { padding: 5px 2px; color: var(--muted); background: transparent; font-size: 10px; }
-.draft-card-actions .draft-delete:hover { color: #b42318; background: transparent; text-decoration: underline; }
+.draft-table-wrap { margin: 0 24px; overflow-x: auto; scrollbar-width: thin; scroll-margin-top: 24px; }
+.draft-table { width: 100%; min-width: 600px; border-collapse: collapse; font-size: 13px; }
+.draft-table th, .draft-table td { padding: 14px 18px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
+.draft-table thead th { background: var(--paper); color: var(--muted); font-size: 11px; font-weight: 600; white-space: nowrap; }
+.draft-table tr:last-child td, .draft-table tr:last-child th[scope="row"] { border-bottom: 0; }
+.draft-table tbody tr:hover { background: #f8fbfe; }
+.draft-table th:first-child, .draft-table td:first-child { width: 216px; }
+.draft-table-image { width: 180px; height: 180px; padding: 8px; border: 1px solid var(--line); border-radius: 12px; background: #fff; display: grid; place-items: center; }
+.draft-table-image img { width: 100%; height: 100%; min-width: 0; min-height: 0; object-fit: contain; display: block; }
+.draft-table-label { font-weight: 500; overflow-wrap: anywhere; }
+.draft-table .draft-cost-cell { text-align: right; white-space: nowrap; }
+.draft-cost-cell strong { color: var(--blue); font-size: 18px; }
+.draft-table-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.draft-table-actions button { font-size: 12px; padding: 8px 14px; white-space: nowrap; }
+.draft-table-actions .draft-delete { padding: 5px 2px; color: var(--muted); background: transparent; font-size: 10px; }
+.draft-table-actions .draft-delete:hover { color: #b42318; background: transparent; text-decoration: underline; }
+.draft-pagination .pagination-info { flex-basis: 100%; text-align: center; }
+.draft-pagination[hidden] { display: none; }
+.draft-pagination button:disabled { cursor: default; opacity: .45; }
+.draft-pagination button[aria-current="page"] { opacity: 1; }
+.draft-table-wrap:focus-visible, .draft-table-actions button:focus-visible, .draft-pagination button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .draft-image-missing { color: var(--muted); font-size: 10px; padding: 8px; text-align: center; overflow-wrap: anywhere; }
 .product-draft-section { margin: 0 0 18px; padding: 14px; border: 1px solid #d8e8f6; border-radius: 12px; background: #f6fafe; }
 .product-draft-toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
@@ -471,7 +480,11 @@ button:disabled { opacity: .55; cursor: wait; }
   #view-drafts .panel-head { flex-wrap: wrap; }
   #draftForm { grid-template-columns: minmax(0, 1fr); }
   .draft-entry, .draft-summary { margin-left: 16px; margin-right: 16px; }
-  .draft-grid { padding-left: 16px; padding-right: 16px; grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); gap: 12px; }
+  .draft-table-wrap { margin-left: 16px; margin-right: 16px; }
+  .draft-table { min-width: 540px; }
+  .draft-table th, .draft-table td { padding: 12px; }
+  .draft-table th:first-child, .draft-table td:first-child { width: 164px; }
+  .draft-table-image { width: 140px; height: 140px; }
   .draft-feedback { margin-left: 16px; margin-right: 16px; }
 }
 

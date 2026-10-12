@@ -185,6 +185,27 @@ function makeDraftHarness() {
   const applied = [];
   const snapshots = [];
   const get = dom.get;
+  // Model the generated pagination buttons so disabled-state assertions inspect
+  // the same controls that renderControls() updates, without a browser dependency.
+  const pagination = get('draftPagination');
+  let paginationMarkup = '';
+  let paginationButtons = [];
+  Object.defineProperty(pagination, 'innerHTML', {
+    get: () => paginationMarkup,
+    set(markup) {
+      paginationMarkup = String(markup);
+      paginationButtons = [...paginationMarkup.matchAll(/<button\b([^>]*)>/g)].map(match => {
+        const button = dom.node();
+        for (const attr of match[1].matchAll(/([\w-]+)="([^"]*)"/g)) button.setAttribute(attr[1], attr[2]);
+        button.dataset.draftPage = button.getAttribute('data-draft-page');
+        button.disabled = /(?:^|\s)disabled(?:\s|=|$)/.test(match[1]);
+        return button;
+      });
+    },
+  });
+  pagination.querySelectorAll = selector => selector === '[data-draft-page]' || selector === 'button'
+    ? paginationButtons.filter(button => button.dataset.draftPage !== null) : [];
+  pagination.contains = button => paginationButtons.includes(button);
   get('draftForm').querySelectorAll = () => ['draftImage', 'draftCost', 'draftSaveBtn', 'draftCancelBtn'].map(get);
   get('draftForm').reset = () => { get('draftImage').value = ''; get('draftCost').value = ''; };
   let idCounter = 0;
@@ -221,8 +242,201 @@ function makeDraftHarness() {
       closest: selector => selector === '[data-draft-edit]' ? { dataset: { draftEdit: id } } : null,
     } });
   }
-  return { ...dom, context, api, calls, applied, snapshots, chooseDraft, editDraft, run: source => vm.runInContext(source, context) };
+  async function changeDraftPage(page) {
+    const button = paginationButtons.find(item => item.dataset.draftPage === String(page)) || dom.node();
+    button.dataset.draftPage = String(page);
+    await pagination.emit('click', { target: {
+      closest: selector => selector === '[data-draft-page]' ? button : null,
+    } });
+  }
+  const visibleDraftIds = () => [...get('draftList').innerHTML.matchAll(/data-draft-row="([^"]*)"/g)].map(match => match[1]);
+  return { ...dom, context, api, calls, applied, snapshots, chooseDraft, editDraft, changeDraftPage, visibleDraftIds,
+    pageButtons: () => paginationButtons, run: source => vm.runInContext(source, context) };
 }
+
+function draftFixtures(count) {
+  return Array.from({ length: count }, (_, index) => ({
+    id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+    image: `https://images.example.test/draft-${index + 1}.jpg`,
+    cost: index + 1,
+    revision: 1,
+  }));
+}
+
+test('Draft table paginates 0, 10, 11 and 23 items in groups of at most 10', async () => {
+  for (const count of [0, 10, 11, 23]) {
+    const h = makeDraftHarness();
+    const items = draftFixtures(count);
+    h.api.applyState(state(items));
+    assert.equal(h.get('draftCount').textContent, `${count} ชิ้นที่ยังไม่ออกเลข`);
+    assert.deepEqual(h.visibleDraftIds(), items.slice(0, 10).map(item => item.id));
+    if (!count) {
+      assert.match(h.get('draftList').innerHTML, /ยังไม่มีแบบร่าง/);
+      assert.equal(h.get('draftPagination').hidden, true);
+      continue;
+    }
+    assert.match(h.get('draftList').innerHTML, /<table\b/);
+    assert.match(h.get('draftList').innerHTML, /<thead\b/);
+    assert.match(h.get('draftList').innerHTML, /<tbody\b/);
+    assert.match(h.get('draftList').innerHTML, /<th\b[^>]*scope="col"/);
+    const pages = Math.ceil(count / 10);
+    for (let page = 1; page <= pages; page += 1) {
+      await h.changeDraftPage(page);
+      assert.deepEqual(h.visibleDraftIds(), items.slice((page - 1) * 10, page * 10).map(item => item.id));
+      assert.ok(h.get('draftPagination').innerHTML.includes(`แสดง ${(page - 1) * 10 + 1}–${Math.min(page * 10, count)} จาก ${count} ชิ้น`));
+      const current = h.pageButtons().find(button => button.getAttribute('aria-current') === 'page');
+      assert.ok(current, 'current page is identified for assistive technology');
+      assert.equal(current.dataset.draftPage, String(page));
+      assert.equal(current.disabled, true);
+      for (const button of h.pageButtons()) {
+        const target = Number(button.dataset.draftPage);
+        if (target < 1 || target > pages) assert.equal(button.disabled, true, 'boundary navigation is disabled');
+      }
+    }
+    const lastPageIds = h.visibleDraftIds();
+    for (const invalidPage of [0, -1, pages + 1, 1.5, 'no-page']) {
+      await h.changeDraftPage(invalidPage);
+      assert.deepEqual(h.visibleDraftIds(), lastPageIds, 'invalid page requests cannot empty the table');
+    }
+    await h.changeDraftPage(1);
+    assert.deepEqual(h.visibleDraftIds(), items.slice(0, 10).map(item => item.id));
+  }
+});
+
+test('Draft columns display image, price, draft code and actions in that order', () => {
+  const h = makeDraftHarness();
+  h.api.applyState(state([draftA]));
+  const html = h.get('draftList').innerHTML;
+  const headings = [...html.match(/<thead>([\s\S]*?)<\/thead>/)[1].matchAll(/<th\b[^>]*>(.*?)<\/th>/g)].map(match => match[1]);
+  assert.deepEqual(headings, ['รูป', 'ราคา', 'รหัสแบบร่าง', 'จัดการ']);
+  const row = html.match(/<tbody><tr\b[^>]*>([\s\S]*?)<\/tr>/)[1];
+  const cells = [...row.matchAll(/<(td|th)\b[^>]*>([\s\S]*?)<\/\1>/g)].map(match => match[2]);
+  assert.equal(cells.length, 4);
+  assert.match(cells[0], /draft-table-image/);
+  assert.match(cells[1], /฿150/);
+  assert.match(cells[2], /00000001/);
+  assert.match(cells[3], /data-draft-edit=/);
+});
+
+test('Draft pagination preserves full totals and offers off-page items in the product picker', async () => {
+  const h = makeDraftHarness();
+  const items = draftFixtures(23);
+  h.api.applyState(state(items));
+  assert.equal(h.get('draftTotal').textContent, '฿276');
+  assert.equal(h.applied.at(-1).draftCost, 276);
+  assert.equal((h.get('productDraftPicker').innerHTML.match(/data-draft-select=/g) || []).length, 23);
+  await h.changeDraftPage(2);
+  assert.equal(h.get('draftTotal').textContent, '฿276');
+  assert.equal(h.applied.length, 1, 'page navigation never re-applies financial totals');
+  await h.chooseDraft(items[22].id);
+  assert.equal(h.api.getProductSelection().draftId, items[22].id);
+  assert.equal(h.get('pfE').value, '23');
+  assert.equal(h.calls.length, 0, 'pagination and selection do not make mutations');
+});
+
+test('Draft refresh preserves a valid page and a configuration change resets to page one', async () => {
+  const h = makeDraftHarness();
+  const items = draftFixtures(23);
+  h.api.applyState(state(items));
+  await h.changeDraftPage(2);
+  h.context.callWriteApi = async () => state(items, '2026-10-12T06:00:00.000Z');
+  await h.api.refresh();
+  assert.deepEqual(h.visibleDraftIds(), items.slice(10, 20).map(item => item.id));
+  h.api.applyState(state(items, '2026-10-12T07:00:00.000Z'));
+  assert.deepEqual(h.visibleDraftIds(), items.slice(10, 20).map(item => item.id));
+  h.context.config = { sheetId: 'new-sheet', sheetName: 'New Products', webAppUrl: 'https://new.example.test/exec' };
+  h.api.resetForConfig();
+  h.api.applyState({ ...state(items), spreadsheetId: 'new-sheet', sourceSheetName: 'New Products' });
+  assert.deepEqual(h.visibleDraftIds(), items.slice(0, 10).map(item => item.id));
+});
+
+test('Draft table clamps its last page after deletion and product conversion', async () => {
+  for (const operation of ['delete', 'convert']) {
+    const h = makeDraftHarness();
+    const items = draftFixtures(11);
+    h.api.applyState(state(items));
+    await h.changeDraftPage(2);
+    assert.deepEqual(h.visibleDraftIds(), [items[10].id]);
+    const remaining = state(items.slice(0, 10), '2026-10-12T06:00:00.000Z');
+    if (operation === 'delete') {
+      const mutationCompleted = deferred();
+      h.context.callWriteApi = async (action, payload) => {
+        assert.equal(action, 'deleteDraft');
+        assert.equal(payload.id, items[10].id);
+        return remaining;
+      };
+      h.context.loadData = async () => { mutationCompleted.resolve(); };
+      await h.get('draftList').emit('click', { target: {
+        closest: selector => selector === '[data-draft-delete]' ? { dataset: { draftDelete: items[10].id } } : null,
+      } });
+      await mutationCompleted.promise;
+    } else {
+      h.api.onProductSaved({ ...remaining, no: 50 });
+    }
+    assert.deepEqual(h.visibleDraftIds(), items.slice(0, 10).map(item => item.id));
+    assert.ok(h.get('draftPagination').innerHTML.includes('แสดง 1–10 จาก 10 ชิ้น'));
+    h.api.onProductSaved({ ...state([], '2026-10-12T07:00:00.000Z'), no: 51 });
+    assert.deepEqual(h.visibleDraftIds(), []);
+    assert.match(h.get('draftList').innerHTML, /ยังไม่มีแบบร่าง/);
+    assert.equal(h.get('draftPagination').hidden, true);
+  }
+});
+
+test('Draft pagination guards product transfer, pending draft save and unavailable state', async () => {
+  const h = makeDraftHarness();
+  const items = draftFixtures(23);
+  h.api.applyState(state(items));
+  const firstPage = items.slice(0, 10).map(item => item.id);
+  h.api.setProductBusy(true);
+  assert.ok(h.pageButtons().every(button => button.disabled));
+  await h.changeDraftPage(2);
+  assert.deepEqual(h.visibleDraftIds(), firstPage);
+  h.api.setProductBusy(false);
+  assert.ok(h.pageButtons().some(button => button.dataset.draftPage === '2' && !button.disabled));
+  h.get('draftImage').value = items[0].image;
+  h.get('draftCost').value = '50';
+  const pending = deferred();
+  h.context.callWriteApi = () => pending.promise;
+  const saving = h.get('draftForm').emit('submit');
+  assert.ok(h.pageButtons().every(button => button.disabled));
+  await h.changeDraftPage(2);
+  assert.deepEqual(h.visibleDraftIds(), firstPage);
+  pending.reject(new Error('offline'));
+  await saving;
+  await h.changeDraftPage(2);
+  const secondPage = items.slice(10, 20).map(item => item.id);
+  assert.deepEqual(h.visibleDraftIds(), secondPage);
+  h.context.callWriteApi = async () => { throw new Error('offline'); };
+  await assert.rejects(h.api.refresh(), /offline/);
+  assert.ok(h.pageButtons().every(button => button.disabled));
+  await h.changeDraftPage(1);
+  assert.deepEqual(h.visibleDraftIds(), secondPage);
+});
+
+test('both page variants include the Draft pager and use full uncropped table images', () => {
+  const externalCss = fs.readFileSync(path.join(root, 'style.css'), 'utf8');
+  const index = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const standalone = fs.readFileSync(path.join(root, 'seek-n-tique-dashboard.html'), 'utf8');
+  for (const html of [index, standalone]) {
+    assert.equal((html.match(/id="draftPagination"/g) || []).length, 1);
+    assert.match(html, /<nav\b[^>]*id="draftPagination"[^>]*aria-label=/);
+    assert.match(html, /<div\b[^>]*class="draft-table-wrap"[^>]*id="draftList"/);
+  }
+  const selector = /\.draft-table-image img\s*\{([^}]*)\}/;
+  const externalRule = externalCss.match(selector);
+  const inlineRule = standalone.match(selector);
+  assert.ok(externalRule && inlineRule);
+  assert.equal(externalRule[1].replace(/\s+/g, ''), inlineRule[1].replace(/\s+/g, ''));
+  for (const declaration of [/object-fit:\s*contain\b/, /width:\s*100%/, /height:\s*100%/]) {
+    assert.match(externalRule[1], declaration);
+  }
+  const imageFrames = css => [...css.matchAll(/\.draft-table-image\s*\{([^}]*)\}/g)].map(match => match[1]);
+  const externalFrames = imageFrames(externalCss);
+  const inlineFrames = imageFrames(standalone);
+  assert.deepEqual(externalFrames.map(rule => rule.replace(/\s+/g, '')), inlineFrames.map(rule => rule.replace(/\s+/g, '')));
+  assert.ok(externalFrames.some(rule => /width:\s*180px/.test(rule) && /height:\s*180px/.test(rule)), 'desktop images have a clear 180px square frame');
+  assert.ok(externalFrames.some(rule => /width:\s*140px/.test(rule) && /height:\s*140px/.test(rule)), 'mobile images retain a clear 140px square frame');
+});
 
 test('create draft accepts an image and zero cost, passes a stable ID, and applies server finance', async () => {
   const h = makeDraftHarness();

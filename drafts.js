@@ -2,7 +2,9 @@
 (function () {
   'use strict';
   const byId = id => document.getElementById(id);
+  const DRAFT_PAGE_SIZE = 10;
   let drafts = [];
+  let draftPage = 1;
   let lastState = null;
   let available = false;
   let lastObservedAt = -Infinity;
@@ -70,12 +72,19 @@
     byId('draftSaveBtn').textContent = busy ? 'กำลังบันทึก…' : editing ? 'บันทึกการแก้ไข' : 'บันทึกแบบร่าง';
     byId('draftRefreshBtn').disabled = busy || Boolean(refreshRequest);
     byId('draftList').querySelectorAll('button').forEach(el => { el.disabled = busy || productBusy || !available; });
+    byId('draftPagination').querySelectorAll('[data-draft-page]').forEach(el => {
+      const page = Number(el.dataset.draftPage);
+      el.disabled = busy || productBusy || !available || page < 1 || page > Math.ceil(drafts.length / DRAFT_PAGE_SIZE) || page === draftPage;
+    });
     byId('productUseDraft').disabled = productBusy || busy || !available;
     byId('productDraftPicker').querySelectorAll('button').forEach(el => { el.disabled = productBusy || busy || !available; });
   }
 
   function renderList() {
     const list = byId('draftList');
+    const totalPages = Math.max(1, Math.ceil(drafts.length / DRAFT_PAGE_SIZE));
+    draftPage = Math.min(draftPage, totalPages);
+    const start = (draftPage - 1) * DRAFT_PAGE_SIZE;
     byId('draftCount').textContent = available ? drafts.length + ' ชิ้นที่ยังไม่ออกเลข' : 'ยังยืนยันข้อมูลล่าสุดไม่ได้';
     byId('draftTotal').textContent = available && lastState ? money(lastState.finance.draftCost) : '—';
     if (!available && !drafts.length) {
@@ -83,14 +92,35 @@
     } else if (!drafts.length) {
       list.innerHTML = '<p class="empty">ยังไม่มีแบบร่าง — เพิ่มรูปและต้นทุนได้จากช่องด้านบน</p>';
     } else {
-      list.innerHTML = drafts.map(draft => '<article class="draft-card">' +
-        '<div class="draft-card-image">' + imageMarkup(draft.image, draftLabel(draft)) + '</div>' +
-        '<div class="draft-card-body"><p>' + escapeHtml(draftLabel(draft)) + '</p><strong>' + money(draft.cost) + '</strong>' +
-        '<div class="draft-card-actions"><button class="ghost" type="button" data-draft-edit="' + escapeHtml(draft.id) + '">แก้ไข</button>' +
-        '<button class="draft-delete" type="button" data-draft-delete="' + escapeHtml(draft.id) + '">ลบแบบร่าง</button></div></div></article>').join('');
+      list.innerHTML = '<table class="draft-table" aria-label="รายการสินค้า Draft">' +
+        '<thead><tr><th scope="col">รูป</th><th scope="col" class="draft-cost-cell">ราคา</th><th scope="col">รหัสแบบร่าง</th><th scope="col">จัดการ</th></tr></thead><tbody>' +
+        drafts.slice(start, start + DRAFT_PAGE_SIZE).map(draft => '<tr data-draft-row="' + escapeHtml(draft.id) + '">' +
+        '<td><div class="draft-table-image">' + imageMarkup(draft.image, draftLabel(draft)) + '</div></td>' +
+        '<td class="draft-cost-cell"><strong>' + money(draft.cost) + '</strong></td><th scope="row" class="draft-table-label">' + escapeHtml(draftLabel(draft)) + '</th>' +
+        '<td><div class="draft-table-actions"><button class="ghost" type="button" data-draft-edit="' + escapeHtml(draft.id) + '">แก้ไข</button>' +
+        '<button class="draft-delete" type="button" data-draft-delete="' + escapeHtml(draft.id) + '">ลบแบบร่าง</button></div></td></tr>').join('') + '</tbody></table>';
       attachImageErrors(list);
     }
+    renderPagination(totalPages, start);
     renderControls();
+  }
+
+  function renderPagination(totalPages, start) {
+    const pagination = byId('draftPagination');
+    pagination.hidden = !drafts.length;
+    if (!drafts.length) { pagination.innerHTML = ''; return; }
+    const pageButton = (page, label, current = false) => '<button class="ghost pagination-num' + (current ? ' active' : '') + '" type="button" data-draft-page="' + page + '"' +
+      (current ? ' aria-current="page"' : '') + ' aria-label="' + (typeof label === 'number' ? 'หน้า ' + label : label) + '">' + label + '</button>';
+    const numbers = [];
+    let previous = 0;
+    for (let page = 1; page <= totalPages; page += 1) {
+      if (page !== 1 && page !== totalPages && Math.abs(page - draftPage) > 1) continue;
+      if (previous && page - previous > 1) numbers.push('<span class="pagination-ellipsis" aria-hidden="true">…</span>');
+      numbers.push(pageButton(page, page, page === draftPage));
+      previous = page;
+    }
+    pagination.innerHTML = '<span class="pagination-info" role="status" aria-live="polite">แสดง ' + (start + 1) + '–' + Math.min(start + DRAFT_PAGE_SIZE, drafts.length) + ' จาก ' + drafts.length + ' ชิ้น</span>' +
+      pageButton(draftPage - 1, 'ก่อนหน้า') + '<div class="pagination-nums">' + numbers.join('') + '</div>' + pageButton(draftPage + 1, 'ถัดไป');
   }
 
   function restoreProductFields() {
@@ -137,6 +167,7 @@
     lastObservedAt = -Infinity;
     lastState = null;
     drafts = [];
+    draftPage = 1;
     available = false;
     loadError = 'กำลังตรวจสอบแบบร่างของชีทที่เลือก…';
     stateWarning = '';
@@ -378,6 +409,17 @@
     const remove = event.target.closest('[data-draft-delete]');
     if (edit) editDraft(edit.dataset.draftEdit);
     else if (remove) deleteDraft(remove.dataset.draftDelete);
+  });
+  byId('draftPagination').addEventListener('click', event => {
+    if (busy || productBusy || !available) return;
+    const button = event.target.closest('[data-draft-page]');
+    if (!button) return;
+    const page = Number(button.dataset.draftPage);
+    if (!Number.isInteger(page) || page < 1 || page > Math.ceil(drafts.length / DRAFT_PAGE_SIZE) || page === draftPage) return;
+    draftPage = page;
+    renderList();
+    byId('draftList').focus({ preventScroll: true });
+    byId('draftList').scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
   byId('productUseDraft').addEventListener('change', () => {
     if (byId('productUseDraft').checked) {
