@@ -340,7 +340,9 @@ button:disabled { opacity: .55; cursor: wait; }
 .product-sort-field label { font-size: 12px; color: var(--muted); }
 .product-sort-field select { width: 100%; min-width: 0; padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px; font: 500 12px 'DM Sans', sans-serif; color: var(--ink); background: #fff; }
 .product-sort-field select:disabled { opacity: .55; }
+.product-sort-actions { display: flex; justify-content: space-between; gap: 12px; }
 .product-sort-controls button { align-self: flex-start; font-size: 12px; padding: 8px 12px; }
+.product-sort-actions #productSortApply { min-width: 76px; }
 .product-sort-controls button:disabled { cursor: default; }
 .product-sort-toggle:focus-visible, .product-sort-controls :focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .product-sort-note { margin: 0; font-size: 11px; color: var(--muted); line-height: 1.6; }

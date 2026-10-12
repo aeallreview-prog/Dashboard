@@ -63,7 +63,7 @@ function makeHarness() {
     return nodes.get(id);
   }
   get('productSortMenu').children.push(get('productSortToggle'), get('productSortControls'));
-  get('productSortControls').children.push(get('productSortField'), get('productSortDirection'), get('productSortReset'));
+  get('productSortControls').children.push(get('productSortField'), get('productSortDirection'), get('productSortReset'), get('productSortApply'));
   const context = vm.createContext({
     document: {
       getElementById: get,
@@ -124,7 +124,7 @@ function product(id, values = {}, status = 'ลงขายแล้ว') {
 }
 
 test('every requested monetary column sorts numerically in both directions with stable ties', () => {
-  for (const field of ['E', 'F', 'G', 'H']) {
+  for (const field of ['E', 'F', 'L', 'H']) {
     const h = makeHarness();
     h.setRows([20, 3, -4, 0, 100.5, 3].map((value, i) => product(i + 1, { [field]: value })));
     h.sort(field, 'desc');
@@ -134,14 +134,16 @@ test('every requested monetary column sorts numerically in both directions with 
   }
 });
 
-test('profit uses G and sale revenue uses H, never another profit or status column', () => {
+test('profit uses L and sale revenue uses H, never G or the status column', () => {
   const h = makeHarness();
   h.setRows([
     product('a', { E: 200, F: 250, G: 50, H: 0, L: 900 }, 'ขายหมดแล้ว'),
     product('b', { E: 10, F: 100, G: 90, H: 300, L: -900 }),
     product('c', { E: 100, F: 50, G: -50, H: 100, L: 9999 }),
   ]);
-  h.sort('G');
+  h.sort('L');
+  assert.deepEqual(h.ids(), ['c', 'a', 'b']);
+  h.sort('L', 'asc');
   assert.deepEqual(h.ids(), ['b', 'a', 'c']);
   h.sort('H');
   assert.deepEqual(h.ids(), ['b', 'c', 'a']);
@@ -166,7 +168,7 @@ test('raw numeric values win over display rounding and currency/formatted fallba
 });
 
 test('blanks, spreadsheet errors, non-numbers and non-finite values stay last in both directions', () => {
-  for (const field of ['F', 'G', 'H']) {
+  for (const field of ['F', 'L', 'H']) {
     const h = makeHarness();
     const missing = [
       ['blank', { v: '' }], ['missing', null], ['spaces', { v: '   ' }],
@@ -234,36 +236,91 @@ test('status filtering and global sorting happen before ten-item pagination on e
   assert.deepEqual(h.renderedIds(), expected.slice(20));
 });
 
-test('sort controls bind only once, synchronize state and restart pagination without clearing status', () => {
+test('sort controls initialize and bind once, with changes staged until Apply commits both values', () => {
   const h = makeHarness();
-  h.setRows([product('a', { F: 10 }), product('b', { F: 20 })]);
-  h.run('populateProductSortControls(); populateProductSortControls()');
-  for (const id of ['productSortField', 'productSortDirection']) assert.equal(h.get(id).listenerCount('change'), 1);
+  h.setRows(Array.from({ length: 23 }, (_, i) => product(i + 1, { F: (23 - i) * 10 })));
+  h.run('renderProductTable(); populateProductSortControls(); populateProductSortControls()');
+  assert.equal(h.get('productSortField').listenerCount('change'), 1);
+  assert.ok(h.get('productSortDirection').listenerCount('change') <= 1);
   assert.equal(h.get('productSortReset').listenerCount('click'), 1);
+  assert.equal(h.get('productSortApply').listenerCount('click'), 1);
   assert.equal(h.get('productSortField').value, 'none');
   assert.equal(h.get('productSortDirection').value, 'desc');
-  h.run(`productPage = 3; productStatusFilterVal = 'ลงขายแล้ว'`);
+  assert.equal(h.get('productSortDirection').disabled, true);
+  h.run(`productStatusFilterVal = 'ลงขายแล้ว'; changeProductPage(3)`);
+  const initialRows = h.renderedIds();
+  const initialHead = h.get('productTableHead').innerHTML;
+  h.get('productSortMenu').open = true;
   h.get('productSortField').value = 'F';
   h.get('productSortField').emit('change');
-  assert.equal(h.run('productPage'), 1);
-  assert.equal(h.run('productSortFieldVal'), 'F');
-  assert.deepEqual(h.renderedIds(), ['b', 'a']);
-  h.run('productPage = 2');
+  assert.equal(h.get('productSortDirection').disabled, false);
+  assert.equal(h.get('productSortReset').disabled, false);
   h.get('productSortDirection').value = 'asc';
   h.get('productSortDirection').emit('change');
-  assert.equal(h.run('productPage'), 1);
-  assert.equal(h.run('productSortDirectionVal'), 'asc');
-  assert.deepEqual(h.renderedIds(), ['a', 'b']);
-  h.run('productPage = 2');
-  h.get('productSortReset').emit('click');
-  assert.equal(h.run('productPage'), 1);
+  assert.equal(h.run('productPage'), 3);
   assert.equal(h.run('productSortFieldVal'), 'none');
+  assert.equal(h.run('productSortDirectionVal'), 'desc');
+  assert.deepEqual(h.renderedIds(), initialRows);
+  assert.equal(h.get('productTableHead').innerHTML, initialHead);
+  assert.equal(h.get('productSortMenu').dataset.active, 'false');
+  assert.equal(h.get('productSortMenu').open, true);
+
+  h.get('productSortApply').emit('click');
+  assert.equal(h.run('productPage'), 1);
+  assert.equal(h.run('productSortFieldVal'), 'F');
+  assert.equal(h.run('productSortDirectionVal'), 'asc');
   assert.equal(h.run('productStatusFilterVal'), 'ลงขายแล้ว');
-  assert.equal(h.get('productSortField').value, 'none');
-  assert.deepEqual(h.renderedIds(), ['a', 'b']);
+  assert.deepEqual(h.renderedIds(), ['23', '22', '21', '20', '19', '18', '17', '16', '15', '14']);
+  assert.match(h.get('productTableHead').innerHTML, /aria-sort="ascending"/);
+  assert.equal(h.get('productSortMenu').open, false);
+  assert.equal(h.focusedNode(), h.get('productSortToggle'));
 });
 
-test('compact sort icon indicates active sorting and returns to its idle label after reset', () => {
+test('reset stages original order and only Apply restores it and restarts pagination', () => {
+  const h = makeHarness();
+  h.setRows(Array.from({ length: 12 }, (_, i) => product(i + 1, { L: i })));
+  h.sort('L', 'desc');
+  h.run('renderProductTable(); changeProductPage(2)');
+  const previousRows = h.renderedIds();
+  const previousTitle = h.get('productSortToggle').attributes['aria-label'];
+  h.get('productSortMenu').open = true;
+  h.get('productSortReset').emit('click');
+  assert.equal(h.run('productPage'), 2);
+  assert.equal(h.run('productSortFieldVal'), 'L');
+  assert.equal(h.run('productSortDirectionVal'), 'desc');
+  assert.deepEqual(h.renderedIds(), previousRows);
+  assert.equal(h.get('productSortMenu').dataset.active, 'true');
+  assert.equal(h.get('productSortToggle').attributes['aria-label'], previousTitle);
+  assert.equal(h.get('productSortMenu').open, true);
+  assert.equal(h.get('productSortField').value, 'none');
+  assert.equal(h.get('productSortDirection').value, 'desc');
+  assert.equal(h.get('productSortDirection').disabled, true);
+  assert.equal(h.get('productSortReset').disabled, true);
+  h.get('productSortApply').emit('click');
+  assert.equal(h.run('productPage'), 1);
+  assert.equal(h.run('productSortFieldVal'), 'none');
+  assert.equal(h.run('productSortDirectionVal'), 'desc');
+  assert.deepEqual(h.renderedIds(), ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']);
+  assert.equal(h.get('productSortMenu').dataset.active, 'false');
+  assert.equal(h.get('productSortMenu').open, false);
+});
+
+test('Apply validates field and direction, and rejects the old G profit mapping', () => {
+  for (const field of ['G', 'invalid', '']) {
+    const h = makeHarness();
+    h.setRows([product('a', { L: 10 }), product('b', { L: 20 })]);
+    h.sort('L', 'desc');
+    h.run('renderProductTable()');
+    h.get('productSortField').value = field;
+    h.get('productSortDirection').value = 'invalid';
+    h.get('productSortApply').emit('click');
+    assert.equal(h.run('productSortFieldVal'), 'none');
+    assert.equal(h.run('productSortDirectionVal'), 'desc');
+    assert.deepEqual(h.renderedIds(), ['a', 'b']);
+  }
+});
+
+test('compact sort icon changes its active state and accessible labels only after Apply', () => {
   const h = makeHarness();
   h.setRows([product('a', { F: 10 }), product('b', { F: 20 })]);
   h.run('populateProductSortControls()');
@@ -277,6 +334,9 @@ test('compact sort icon indicates active sorting and returns to its idle label a
 
   h.get('productSortField').value = 'F';
   h.get('productSortField').emit('change');
+  assert.equal(menu.dataset.active, 'false');
+  assert.equal(toggle.attributes['aria-label'], idleLabel);
+  h.get('productSortApply').emit('click');
   assert.equal(menu.dataset.active, 'true');
   assert.notEqual(toggle.attributes['aria-label'], idleLabel);
   assert.notEqual(toggle.title || toggle.attributes.title, idleTitle);
@@ -284,21 +344,29 @@ test('compact sort icon indicates active sorting and returns to its idle label a
   const descendingLabel = toggle.attributes['aria-label'];
   h.get('productSortDirection').value = 'asc';
   h.get('productSortDirection').emit('change');
+  assert.equal(toggle.attributes['aria-label'], descendingLabel);
+  h.get('productSortApply').emit('click');
   assert.notEqual(toggle.attributes['aria-label'], descendingLabel, 'Accessible name reflects direction');
 
   h.get('productSortReset').emit('click');
+  assert.equal(menu.dataset.active, 'true');
+  h.get('productSortApply').emit('click');
   assert.equal(menu.dataset.active, 'false');
   assert.equal(toggle.attributes['aria-label'], idleLabel);
   assert.equal(toggle.title || toggle.attributes.title, idleTitle);
 });
 
-test('Escape closes the sort menu, returns focus to its icon and preserves the selected ordering', () => {
+test('Escape closes the sort menu without applying or discarding pending choices', () => {
   const h = makeHarness();
   h.setRows([product('a', { F: 10 }), product('b', { F: 20 })]);
   h.sort('F', 'desc');
   h.run('renderProductTable()');
   const menu = h.get('productSortMenu');
   menu.open = true;
+  h.get('productSortField').value = 'L';
+  h.get('productSortField').emit('change');
+  h.get('productSortDirection').value = 'asc';
+  h.get('productSortDirection').emit('change');
   let prevented = false;
   menu.emit('keydown', { key: 'ArrowDown', target: h.get('productSortField') });
   assert.equal(menu.open, true, 'Other keys must remain available for select navigation');
@@ -313,6 +381,10 @@ test('Escape closes the sort menu, returns focus to its icon and preserves the s
   assert.equal(h.run('productSortDirectionVal'), 'desc');
   assert.deepEqual(h.renderedIds(), ['b', 'a']);
   assert.equal(menu.dataset.active, 'true');
+  menu.open = true;
+  menu.emit('toggle');
+  assert.equal(h.get('productSortField').value, 'L');
+  assert.equal(h.get('productSortDirection').value, 'asc');
 });
 
 test('outside clicks close the sort menu but clicks inside it preserve both the menu and sort state', () => {
@@ -321,9 +393,13 @@ test('outside clicks close the sort menu but clicks inside it preserve both the 
   h.sort('E', 'asc');
   h.run('renderProductTable(); populateProductSortControls(); populateProductSortControls()');
   const menu = h.get('productSortMenu');
+  h.get('productSortField').value = 'H';
+  h.get('productSortField').emit('change');
+  h.get('productSortDirection').value = 'desc';
+  h.get('productSortDirection').emit('change');
   assert.equal(menu.listenerCount('keydown'), 1);
   assert.equal(h.documentListenerCount('click'), 1);
-  for (const target of [menu, h.get('productSortToggle'), h.get('productSortField'), h.get('productSortDirection')]) {
+  for (const target of [menu, h.get('productSortToggle'), h.get('productSortField'), h.get('productSortDirection'), h.get('productSortApply')]) {
     menu.open = true;
     h.emitDocument('click', { target });
     assert.equal(menu.open, true, `Inside click must not close menu: ${target.id}`);
@@ -334,6 +410,10 @@ test('outside clicks close the sort menu but clicks inside it preserve both the 
   assert.equal(h.run('productSortDirectionVal'), 'asc');
   assert.deepEqual(h.renderedIds(), ['a', 'b']);
   assert.equal(menu.dataset.active, 'true');
+  menu.open = true;
+  menu.emit('toggle');
+  assert.equal(h.get('productSortField').value, 'H');
+  assert.equal(h.get('productSortDirection').value, 'desc');
 });
 
 test('a data refresh preserves the selected sort and applies it to the latest values', () => {
@@ -349,10 +429,37 @@ test('a data refresh preserves the selected sort and applies it to the latest va
   assert.equal(h.get('productSortDirection').value, 'desc');
 });
 
+test('refresh retains pending controls while ordering new data by the applied settings', () => {
+  const h = makeHarness();
+  h.setRows([product('a', { H: 10, L: 10 }), product('b', { H: 20, L: 20 })]);
+  h.sort('H', 'desc');
+  h.run('renderProductTable()');
+  const appliedLabel = h.get('productSortToggle').attributes['aria-label'];
+  h.get('productSortMenu').open = true;
+  h.get('productSortField').value = 'L';
+  h.get('productSortField').emit('change');
+  h.get('productSortDirection').value = 'asc';
+  h.get('productSortDirection').emit('change');
+  h.setRows([product('a', { H: 30, L: 100 }), product('b', { H: 20, L: 50 }), product('c', { H: 40, L: -10 })]);
+  h.run('renderProductTable(); populateProductSortControls()');
+  assert.deepEqual(h.renderedIds(), ['c', 'a', 'b']);
+  assert.equal(h.run('productSortFieldVal'), 'H');
+  assert.equal(h.run('productSortDirectionVal'), 'desc');
+  assert.equal(h.get('productSortField').value, 'L');
+  assert.equal(h.get('productSortDirection').value, 'asc');
+  assert.equal(h.get('productSortMenu').open, true);
+  assert.equal(h.get('productSortToggle').attributes['aria-label'], appliedLabel);
+  h.get('productSortApply').emit('click');
+  assert.deepEqual(h.renderedIds(), ['c', 'b', 'a']);
+  assert.equal(h.run('productSortFieldVal'), 'L');
+  assert.equal(h.run('productSortDirectionVal'), 'asc');
+  assert.match(h.get('productSortToggle').attributes['aria-label'], /กำไรของ/);
+});
+
 test('sorting hidden monetary data does not reveal columns or change the visibility toggle', () => {
   const h = makeHarness();
-  h.setRows([product('a', { G: -10 }), product('b', { G: 30 })]);
-  h.sort('G', 'desc');
+  h.setRows([product('a', { L: -10 }), product('b', { L: 30 })]);
+  h.sort('L', 'desc');
   h.run('renderProductTable()');
   assert.deepEqual(h.renderedIds(), ['b', 'a']);
   assert.equal(h.run('hideSensitiveData'), true);
@@ -361,7 +468,7 @@ test('sorting hidden monetary data does not reveal columns or change the visibil
   h.get('hideSensitiveCheckbox').checked = false;
   h.get('hideSensitiveCheckbox').emit('change');
   assert.equal(h.run('hideSensitiveData'), false);
-  assert.equal(h.run('productSortFieldVal'), 'G');
+  assert.equal(h.run('productSortFieldVal'), 'L');
   assert.deepEqual(Array.from(h.run('getVisibleCols()')), h.context.DISPLAY_COLS);
   assert.deepEqual(h.renderedIds(), ['b', 'a']);
 });
@@ -384,16 +491,18 @@ test('standalone HTML has the exact same product-table implementation as app.js'
 
 test('both entry points expose the same uniquely identified sort fields and directions', () => {
   for (const [name, html] of [['index.html', index], ['seek-n-tique-dashboard.html', standalone]]) {
-    for (const id of ['productSortMenu', 'productSortToggle', 'productSortControls', 'productSortField', 'productSortDirection', 'productSortReset']) {
+    for (const id of ['productSortMenu', 'productSortToggle', 'productSortControls', 'productSortField', 'productSortDirection', 'productSortReset', 'productSortApply']) {
       assert.equal((html.match(new RegExp(`\\bid="${id}"`, 'g')) || []).length, 1, `${name}: unique ${id}`);
     }
-    for (const [id, expected] of [['productSortField', ['none', 'E', 'F', 'G', 'H']], ['productSortDirection', ['desc', 'asc']]]) {
+    for (const [id, expected] of [['productSortField', ['none', 'E', 'F', 'L', 'H']], ['productSortDirection', ['desc', 'asc']]]) {
       const select = html.match(new RegExp(`<select\\b[^>]*id="${id}"[^>]*>([\\s\\S]*?)<\\/select>`));
       assert.ok(select, `${name}: ${id} select`);
       assert.deepEqual(Array.from(select[1].matchAll(/<option\b[^>]*value="([^"]+)"/g), match => match[1]), expected);
       assert.match(html, new RegExp(`<label\\b[^>]*for="${id}"`), `${name}: accessible ${id} label`);
     }
     assert.match(html, /<button\b[^>]*id="productSortReset"[^>]*type="button"|<button\b[^>]*type="button"[^>]*id="productSortReset"/, `${name}: reset must not submit`);
+    assert.match(html, /<button\b[^>]*id="productSortApply"[^>]*type="button"[^>]*>\s*เลือก\s*<\/button>|<button\b[^>]*type="button"[^>]*id="productSortApply"[^>]*>\s*เลือก\s*<\/button>/, `${name}: explicit Apply button must not submit`);
+    assert.match(html, /<option\b[^>]*value="L"[^>]*>[^<]*กำไรของ[^<]*<\/option>/, `${name}: profit option maps to column L`);
   }
 });
 
@@ -413,5 +522,6 @@ test('both entry points use a closed native details control with an icon-only ac
     assert.match(details[2], /\bid="productSortField"/, `${name}: field selector remains available after opening`);
     assert.match(details[2], /\bid="productSortDirection"/, `${name}: direction selector remains available after opening`);
     assert.match(details[2], /\bid="productSortReset"/, `${name}: reset remains available after opening`);
+    assert.match(details[2], /\bid="productSortApply"/, `${name}: Apply remains inside the sorting menu`);
   }
 });

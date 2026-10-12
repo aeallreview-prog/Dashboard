@@ -471,7 +471,7 @@ function doSearch() {
 const PRODUCT_PAGE_SIZE = 10;
 let productPage = 1;
 let productStatusFilterVal = 'all';
-const PRODUCT_SORT_COLS = ['E', 'F', 'G', 'H'];
+const PRODUCT_SORT_COLS = ['E', 'F', 'L', 'H'];
 let productSortFieldVal = 'none';
 let productSortDirectionVal = 'desc';
 let hideSensitiveData = true; // default: sensitive columns hidden
@@ -516,20 +516,25 @@ function populateProductSortControls() {
   const field = document.getElementById('productSortField');
   const direction = document.getElementById('productSortDirection');
   const reset = document.getElementById('productSortReset');
+  const apply = document.getElementById('productSortApply');
   const menu = document.getElementById('productSortMenu');
   const toggle = document.getElementById('productSortToggle');
   const active = productSortFieldVal !== 'none';
-  const sortLabels = { E: 'ต้นทุนของ', F: 'ราคาขาย', G: 'กำไรของ', H: 'ขายแล้ว' };
+  const sortLabels = { E: 'ต้นทุนของ', F: 'ราคาขาย', L: 'กำไรของ', H: 'ขายแล้ว' };
   const description = active ? 'เรียงสินค้า: ' + sortLabels[productSortFieldVal] + ' ' + (productSortDirectionVal === 'asc' ? 'น้อยไปมาก' : 'มากไปน้อย') : 'เรียงสินค้า';
   menu.dataset.active = String(active);
   toggle.title = description;
   toggle.setAttribute('aria-label', description);
-  field.value = productSortFieldVal;
-  direction.value = productSortDirectionVal;
-  direction.disabled = productSortFieldVal === 'none';
-  reset.disabled = productSortFieldVal === 'none';
+  // Keep pending choices through refreshes; only the Apply button changes the table.
   if (field.dataset.bound) return;
   field.dataset.bound = '1';
+  field.value = productSortFieldVal;
+  direction.value = productSortDirectionVal;
+  const updatePendingControls = () => {
+    direction.disabled = field.value === 'none';
+    reset.disabled = field.value === 'none';
+  };
+  updatePendingControls();
   menu.addEventListener('keydown', event => {
     if (event.key === 'Escape' && menu.open) {
       menu.open = false;
@@ -541,20 +546,24 @@ function populateProductSortControls() {
     if (menu.open && !menu.contains(event.target)) menu.open = false;
   });
   field.addEventListener('change', () => {
-    productSortFieldVal = PRODUCT_SORT_COLS.includes(field.value) ? field.value : 'none';
-    productPage = 1;
-    renderProductTable();
-  });
-  direction.addEventListener('change', () => {
-    productSortDirectionVal = direction.value === 'asc' ? 'asc' : 'desc';
-    productPage = 1;
-    renderProductTable();
+    field.value = PRODUCT_SORT_COLS.includes(field.value) ? field.value : 'none';
+    updatePendingControls();
   });
   reset.addEventListener('click', () => {
-    productSortFieldVal = 'none';
-    productSortDirectionVal = 'desc';
+    field.value = 'none';
+    direction.value = 'desc';
+    updatePendingControls();
+  });
+  apply.addEventListener('click', () => {
+    productSortFieldVal = PRODUCT_SORT_COLS.includes(field.value) ? field.value : 'none';
+    productSortDirectionVal = direction.value === 'asc' ? 'asc' : 'desc';
+    field.value = productSortFieldVal;
+    direction.value = productSortDirectionVal;
+    updatePendingControls();
     productPage = 1;
     renderProductTable();
+    menu.open = false;
+    toggle.focus();
   });
 }
 
