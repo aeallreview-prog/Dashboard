@@ -316,6 +316,24 @@ button:disabled { opacity: .55; cursor: wait; }
   padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line);
   font: 500 12px 'DM Sans', sans-serif; color: var(--ink); background: var(--paper);
 }
+.product-inventory-panel { overflow: visible; }
+.product-table-title { position: relative; display: flex; align-items: center; gap: 10px; }
+.product-sort-menu { flex: none; }
+.product-sort-toggle { position: relative; display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--muted); cursor: pointer; list-style: none; }
+.product-sort-toggle::-webkit-details-marker { display: none; }
+.product-sort-toggle:hover, .product-sort-menu[open] .product-sort-toggle { color: var(--blue); background: #edf5fc; border-color: #c7dcec; }
+.product-sort-menu[data-active="true"] .product-sort-toggle { color: var(--blue); background: #edf5fc; border-color: #c7dcec; }
+.product-sort-menu[data-active="true"] .product-sort-toggle::after { content: ''; position: absolute; top: 5px; right: 5px; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+.product-sort-controls { position: absolute; top: calc(100% + 8px); left: 0; z-index: 15; display: flex; flex-direction: column; gap: 14px; width: 300px; max-width: calc(100vw - 72px); padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: #fff; box-shadow: 0 12px 32px rgba(17,45,66,.16); }
+.product-sort-menu:not([open]) .product-sort-controls { display: none; }
+.product-sort-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.product-sort-field label { font-size: 12px; color: var(--muted); }
+.product-sort-field select { width: 100%; min-width: 0; padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px; font: 500 12px 'DM Sans', sans-serif; color: var(--ink); background: #fff; }
+.product-sort-field select:disabled { opacity: .55; }
+.product-sort-controls button { align-self: flex-start; font-size: 12px; padding: 8px 12px; }
+.product-sort-controls button:disabled { cursor: default; }
+.product-sort-toggle:focus-visible, .product-sort-controls :focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.product-sort-note { margin: 0; font-size: 11px; color: var(--muted); line-height: 1.6; }
 .product-table-wrap { overflow-x: auto; padding: 0 24px 6px; scrollbar-width: thin; cursor: grab; }
 .product-table-wrap.drag-scrolling, .search-fields.drag-scrolling { cursor: grabbing; user-select: none; }
 .product-table { width: 100%; border-collapse: collapse; font-size: 13px; white-space: nowrap; }
@@ -756,10 +774,36 @@ button:disabled { opacity: .55; cursor: wait; }
       <div id="searchResult"></div>
     </div>
 
-    <div class="panel">
+    <div class="panel product-inventory-panel">
       <div class="panel-head">
-        <div>
+        <div class="product-table-title">
           <h2>สินค้าทั้งหมด</h2>
+          <details id="productSortMenu" class="product-sort-menu" data-active="false">
+            <summary id="productSortToggle" class="product-sort-toggle" title="เรียงสินค้า" aria-label="เรียงสินค้า" aria-controls="productSortControls">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16l-6 7v6l-4 2v-8z"/></svg>
+            </summary>
+            <div id="productSortControls" class="product-sort-controls" role="group" aria-label="เรียงสินค้าทั้งหมด">
+              <div class="product-sort-field">
+                <label for="productSortField">เรียงตาม</label>
+                <select id="productSortField">
+                  <option value="none">ลำดับเดิม</option>
+                  <option value="E">ต้นทุนของ</option>
+                  <option value="F">ราคาขาย</option>
+                  <option value="G">กำไรของ (ราคาขาย − ต้นทุน)</option>
+                  <option value="H">ขายแล้ว</option>
+                </select>
+              </div>
+              <div class="product-sort-field">
+                <label for="productSortDirection">ลำดับ</label>
+                <select id="productSortDirection" disabled>
+                  <option value="desc">มาก → น้อย</option>
+                  <option value="asc">น้อย → มาก</option>
+                </select>
+              </div>
+              <button id="productSortReset" class="ghost" type="button" disabled>ล้างการเรียง</button>
+              <p class="product-sort-note">เรียงเฉพาะการแสดงผล ไม่เปลี่ยนลำดับในชีท · ช่องว่างอยู่ท้ายรายการ</p>
+            </div>
+          </details>
         </div>
         <div class="table-filter">
           <button id="addProductBtn" class="btn-yellow" style="font-size:12px;padding:8px 14px;">+ เพิ่มสินค้าใหม่</button>
@@ -1482,6 +1526,9 @@ function doSearch() {
 const PRODUCT_PAGE_SIZE = 10;
 let productPage = 1;
 let productStatusFilterVal = 'all';
+const PRODUCT_SORT_COLS = ['E', 'F', 'G', 'H'];
+let productSortFieldVal = 'none';
+let productSortDirectionVal = 'desc';
 let hideSensitiveData = true; // default: sensitive columns hidden
 
 // columns considered "sensitive" — hidden from the table when the toggle is checked
@@ -1520,15 +1567,87 @@ function getAllProductRows() {
   return lastRows.filter((row, idx) => idx > 0 && rowHasProduct(row));
 }
 
+function populateProductSortControls() {
+  const field = document.getElementById('productSortField');
+  const direction = document.getElementById('productSortDirection');
+  const reset = document.getElementById('productSortReset');
+  const menu = document.getElementById('productSortMenu');
+  const toggle = document.getElementById('productSortToggle');
+  const active = productSortFieldVal !== 'none';
+  const sortLabels = { E: 'ต้นทุนของ', F: 'ราคาขาย', G: 'กำไรของ', H: 'ขายแล้ว' };
+  const description = active ? 'เรียงสินค้า: ' + sortLabels[productSortFieldVal] + ' ' + (productSortDirectionVal === 'asc' ? 'น้อยไปมาก' : 'มากไปน้อย') : 'เรียงสินค้า';
+  menu.dataset.active = String(active);
+  toggle.title = description;
+  toggle.setAttribute('aria-label', description);
+  field.value = productSortFieldVal;
+  direction.value = productSortDirectionVal;
+  direction.disabled = productSortFieldVal === 'none';
+  reset.disabled = productSortFieldVal === 'none';
+  if (field.dataset.bound) return;
+  field.dataset.bound = '1';
+  menu.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && menu.open) {
+      menu.open = false;
+      event.preventDefault();
+      toggle.focus();
+    }
+  });
+  document.addEventListener('click', event => {
+    if (menu.open && !menu.contains(event.target)) menu.open = false;
+  });
+  field.addEventListener('change', () => {
+    productSortFieldVal = PRODUCT_SORT_COLS.includes(field.value) ? field.value : 'none';
+    productPage = 1;
+    renderProductTable();
+  });
+  direction.addEventListener('change', () => {
+    productSortDirectionVal = direction.value === 'asc' ? 'asc' : 'desc';
+    productPage = 1;
+    renderProductTable();
+  });
+  reset.addEventListener('click', () => {
+    productSortFieldVal = 'none';
+    productSortDirectionVal = 'desc';
+    productPage = 1;
+    renderProductTable();
+  });
+}
+
+function getProductSortValue(row, columnIndex) {
+  const cell = row.c && row.c[columnIndex];
+  if (!cell) return null;
+  if (typeof cell.v === 'number') return Number.isFinite(cell.v) ? cell.v : null;
+  const text = typeof cell.v === 'string' ? cell.v : cell.v == null && typeof cell.f === 'string' ? cell.f : '';
+  let amount = text.trim().replace(/−/g, '-').replace(/บาท|฿|,|\s/g, '');
+  if (/^\(.*\)$/.test(amount)) amount = '-' + amount.slice(1, -1);
+  // Missing values and spreadsheet errors must not become zero.
+  if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(amount)) return null;
+  const value = Number(amount);
+  return Number.isFinite(value) ? value : null;
+}
+
 function getFilteredProductRows() {
-  const rows = getAllProductRows();
-  if (productStatusFilterVal === 'all') return rows;
-  return rows.filter(row => cellText(row.c && row.c[STATUS_DISPLAY_COL]) === productStatusFilterVal);
+  let rows = getAllProductRows();
+  if (productStatusFilterVal !== 'all') {
+    rows = rows.filter(row => cellText(row.c && row.c[STATUS_DISPLAY_COL]) === productStatusFilterVal);
+  }
+  if (!PRODUCT_SORT_COLS.includes(productSortFieldVal)) return rows;
+  const column = colToIndex(productSortFieldVal);
+  const direction = productSortDirectionVal === 'asc' ? 1 : -1;
+  // Sort all matching products before pagination, never mutate the sheet-order array.
+  return rows.map((row, index) => ({ row, index, value: getProductSortValue(row, column) }))
+    .sort((a, b) => {
+      if (a.value === null && b.value !== null) return 1;
+      if (a.value !== null && b.value === null) return -1;
+      if (a.value === b.value) return a.index - b.index;
+      return (a.value - b.value) * direction;
+    }).map(item => item.row);
 }
 
 function renderProductTableHead() {
   const thead = document.getElementById('productTableHead');
-  thead.innerHTML = '<tr>' + getVisibleCols().map(i => `<th>${headerLabel(i)}</th>`).join('') + '</tr>';
+  const sortColumn = PRODUCT_SORT_COLS.includes(productSortFieldVal) ? colToIndex(productSortFieldVal) : -1;
+  thead.innerHTML = '<tr>' + getVisibleCols().map(i => `<th scope="col"${i === sortColumn ? ' aria-sort="' + (productSortDirectionVal === 'asc' ? 'ascending' : 'descending') + '"' : ''}>${headerLabel(i)}</th>`).join('') + '</tr>';
 }
 
 let expandedProductRows = new Set(); // set of No. values currently expanded
@@ -1621,6 +1740,7 @@ function changeProductPage(p) {
 
 function renderProductTable() {
   populateStatusFilterOptions();
+  populateProductSortControls();
   renderProductTableHead();
   const tbody = document.getElementById('productTableBody');
   detailCopyTexts = [];

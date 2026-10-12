@@ -326,6 +326,24 @@ button:disabled { opacity: .55; cursor: wait; }
   padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line);
   font: 500 12px 'DM Sans', sans-serif; color: var(--ink); background: var(--paper);
 }
+.product-inventory-panel { overflow: visible; }
+.product-table-title { position: relative; display: flex; align-items: center; gap: 10px; }
+.product-sort-menu { flex: none; }
+.product-sort-toggle { position: relative; display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--muted); cursor: pointer; list-style: none; }
+.product-sort-toggle::-webkit-details-marker { display: none; }
+.product-sort-toggle:hover, .product-sort-menu[open] .product-sort-toggle { color: var(--blue); background: #edf5fc; border-color: #c7dcec; }
+.product-sort-menu[data-active="true"] .product-sort-toggle { color: var(--blue); background: #edf5fc; border-color: #c7dcec; }
+.product-sort-menu[data-active="true"] .product-sort-toggle::after { content: ''; position: absolute; top: 5px; right: 5px; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+.product-sort-controls { position: absolute; top: calc(100% + 8px); left: 0; z-index: 15; display: flex; flex-direction: column; gap: 14px; width: 300px; max-width: calc(100vw - 72px); padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: #fff; box-shadow: 0 12px 32px rgba(17,45,66,.16); }
+.product-sort-menu:not([open]) .product-sort-controls { display: none; }
+.product-sort-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.product-sort-field label { font-size: 12px; color: var(--muted); }
+.product-sort-field select { width: 100%; min-width: 0; padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px; font: 500 12px 'DM Sans', sans-serif; color: var(--ink); background: #fff; }
+.product-sort-field select:disabled { opacity: .55; }
+.product-sort-controls button { align-self: flex-start; font-size: 12px; padding: 8px 12px; }
+.product-sort-controls button:disabled { cursor: default; }
+.product-sort-toggle:focus-visible, .product-sort-controls :focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.product-sort-note { margin: 0; font-size: 11px; color: var(--muted); line-height: 1.6; }
 .product-table-wrap { overflow-x: auto; padding: 0 24px 6px; scrollbar-width: thin; cursor: grab; }
 .product-table-wrap.drag-scrolling, .search-fields.drag-scrolling { cursor: grabbing; user-select: none; }
 .product-table { width: 100%; border-collapse: collapse; font-size: 13px; white-space: nowrap; }

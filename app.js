@@ -471,6 +471,9 @@ function doSearch() {
 const PRODUCT_PAGE_SIZE = 10;
 let productPage = 1;
 let productStatusFilterVal = 'all';
+const PRODUCT_SORT_COLS = ['E', 'F', 'G', 'H'];
+let productSortFieldVal = 'none';
+let productSortDirectionVal = 'desc';
 let hideSensitiveData = true; // default: sensitive columns hidden
 
 // columns considered "sensitive" — hidden from the table when the toggle is checked
@@ -509,15 +512,87 @@ function getAllProductRows() {
   return lastRows.filter((row, idx) => idx > 0 && rowHasProduct(row));
 }
 
+function populateProductSortControls() {
+  const field = document.getElementById('productSortField');
+  const direction = document.getElementById('productSortDirection');
+  const reset = document.getElementById('productSortReset');
+  const menu = document.getElementById('productSortMenu');
+  const toggle = document.getElementById('productSortToggle');
+  const active = productSortFieldVal !== 'none';
+  const sortLabels = { E: 'ต้นทุนของ', F: 'ราคาขาย', G: 'กำไรของ', H: 'ขายแล้ว' };
+  const description = active ? 'เรียงสินค้า: ' + sortLabels[productSortFieldVal] + ' ' + (productSortDirectionVal === 'asc' ? 'น้อยไปมาก' : 'มากไปน้อย') : 'เรียงสินค้า';
+  menu.dataset.active = String(active);
+  toggle.title = description;
+  toggle.setAttribute('aria-label', description);
+  field.value = productSortFieldVal;
+  direction.value = productSortDirectionVal;
+  direction.disabled = productSortFieldVal === 'none';
+  reset.disabled = productSortFieldVal === 'none';
+  if (field.dataset.bound) return;
+  field.dataset.bound = '1';
+  menu.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && menu.open) {
+      menu.open = false;
+      event.preventDefault();
+      toggle.focus();
+    }
+  });
+  document.addEventListener('click', event => {
+    if (menu.open && !menu.contains(event.target)) menu.open = false;
+  });
+  field.addEventListener('change', () => {
+    productSortFieldVal = PRODUCT_SORT_COLS.includes(field.value) ? field.value : 'none';
+    productPage = 1;
+    renderProductTable();
+  });
+  direction.addEventListener('change', () => {
+    productSortDirectionVal = direction.value === 'asc' ? 'asc' : 'desc';
+    productPage = 1;
+    renderProductTable();
+  });
+  reset.addEventListener('click', () => {
+    productSortFieldVal = 'none';
+    productSortDirectionVal = 'desc';
+    productPage = 1;
+    renderProductTable();
+  });
+}
+
+function getProductSortValue(row, columnIndex) {
+  const cell = row.c && row.c[columnIndex];
+  if (!cell) return null;
+  if (typeof cell.v === 'number') return Number.isFinite(cell.v) ? cell.v : null;
+  const text = typeof cell.v === 'string' ? cell.v : cell.v == null && typeof cell.f === 'string' ? cell.f : '';
+  let amount = text.trim().replace(/−/g, '-').replace(/บาท|฿|,|\s/g, '');
+  if (/^\(.*\)$/.test(amount)) amount = '-' + amount.slice(1, -1);
+  // Missing values and spreadsheet errors must not become zero.
+  if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(amount)) return null;
+  const value = Number(amount);
+  return Number.isFinite(value) ? value : null;
+}
+
 function getFilteredProductRows() {
-  const rows = getAllProductRows();
-  if (productStatusFilterVal === 'all') return rows;
-  return rows.filter(row => cellText(row.c && row.c[STATUS_DISPLAY_COL]) === productStatusFilterVal);
+  let rows = getAllProductRows();
+  if (productStatusFilterVal !== 'all') {
+    rows = rows.filter(row => cellText(row.c && row.c[STATUS_DISPLAY_COL]) === productStatusFilterVal);
+  }
+  if (!PRODUCT_SORT_COLS.includes(productSortFieldVal)) return rows;
+  const column = colToIndex(productSortFieldVal);
+  const direction = productSortDirectionVal === 'asc' ? 1 : -1;
+  // Sort all matching products before pagination, never mutate the sheet-order array.
+  return rows.map((row, index) => ({ row, index, value: getProductSortValue(row, column) }))
+    .sort((a, b) => {
+      if (a.value === null && b.value !== null) return 1;
+      if (a.value !== null && b.value === null) return -1;
+      if (a.value === b.value) return a.index - b.index;
+      return (a.value - b.value) * direction;
+    }).map(item => item.row);
 }
 
 function renderProductTableHead() {
   const thead = document.getElementById('productTableHead');
-  thead.innerHTML = '<tr>' + getVisibleCols().map(i => `<th>${headerLabel(i)}</th>`).join('') + '</tr>';
+  const sortColumn = PRODUCT_SORT_COLS.includes(productSortFieldVal) ? colToIndex(productSortFieldVal) : -1;
+  thead.innerHTML = '<tr>' + getVisibleCols().map(i => `<th scope="col"${i === sortColumn ? ' aria-sort="' + (productSortDirectionVal === 'asc' ? 'ascending' : 'descending') + '"' : ''}>${headerLabel(i)}</th>`).join('') + '</tr>';
 }
 
 let expandedProductRows = new Set(); // set of No. values currently expanded
@@ -610,6 +685,7 @@ function changeProductPage(p) {
 
 function renderProductTable() {
   populateStatusFilterOptions();
+  populateProductSortControls();
   renderProductTableHead();
   const tbody = document.getElementById('productTableBody');
   detailCopyTexts = [];

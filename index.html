@@ -6,7 +6,7 @@
 <title>seek n tique — แดชบอร์ดยอดขาย</title>
 <link rel="icon" href="logo.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&text=table_chart_view,content_paste_search,calculate,sticky_note_2,chevron_left,draft&display=block" />
-<link rel="stylesheet" href="style.css?v=20261012-draft-table">
+<link rel="stylesheet" href="style.css?v=20261012-sort-icon">
 </head>
 <body>
 
@@ -216,10 +216,36 @@
       <div id="searchResult"></div>
     </div>
 
-    <div class="panel">
+    <div class="panel product-inventory-panel">
       <div class="panel-head">
-        <div>
+        <div class="product-table-title">
           <h2>สินค้าทั้งหมด</h2>
+          <details id="productSortMenu" class="product-sort-menu" data-active="false">
+            <summary id="productSortToggle" class="product-sort-toggle" title="เรียงสินค้า" aria-label="เรียงสินค้า" aria-controls="productSortControls">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16l-6 7v6l-4 2v-8z"/></svg>
+            </summary>
+            <div id="productSortControls" class="product-sort-controls" role="group" aria-label="เรียงสินค้าทั้งหมด">
+              <div class="product-sort-field">
+                <label for="productSortField">เรียงตาม</label>
+                <select id="productSortField">
+                  <option value="none">ลำดับเดิม</option>
+                  <option value="E">ต้นทุนของ</option>
+                  <option value="F">ราคาขาย</option>
+                  <option value="G">กำไรของ (ราคาขาย − ต้นทุน)</option>
+                  <option value="H">ขายแล้ว</option>
+                </select>
+              </div>
+              <div class="product-sort-field">
+                <label for="productSortDirection">ลำดับ</label>
+                <select id="productSortDirection" disabled>
+                  <option value="desc">มาก → น้อย</option>
+                  <option value="asc">น้อย → มาก</option>
+                </select>
+              </div>
+              <button id="productSortReset" class="ghost" type="button" disabled>ล้างการเรียง</button>
+              <p class="product-sort-note">เรียงเฉพาะการแสดงผล ไม่เปลี่ยนลำดับในชีท · ช่องว่างอยู่ท้ายรายการ</p>
+            </div>
+          </details>
         </div>
         <div class="table-filter">
           <button id="addProductBtn" class="btn-yellow" style="font-size:12px;padding:8px 14px;">+ เพิ่มสินค้าใหม่</button>
@@ -471,7 +497,7 @@
 </div>
 
 <script src="drafts.js?v=20261012-draft-table-order"></script>
-<script src="app.js?v=20261012-product-drafts"></script>
+<script src="app.js?v=20261012-sort-icon"></script>
 <script src="followers-chart.js?v=20261004-auto-range"></script>
 </body>
 </html>
