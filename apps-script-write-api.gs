@@ -38,7 +38,19 @@ function doPost(e) {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = ss.getSheets()[PRODUCT_SHEET_INDEX];
 
-    if (body.action === 'getFollowerHistory') {
+    if (body.action === 'getGiftState' || body.action === 'saveGift') {
+      // Gift rows never mutate products or drafts. Reads are side-effect free;
+      // saves may append current source totals to the existing finance history.
+      // In particular, reading gifts must never replay a draft transfer.
+      var giftLock = LockService.getScriptLock();
+      giftLock.waitLock(30000);
+      try {
+        validateGiftSource(ss, sheet, body);
+        result = body.action === 'getGiftState' ? getGiftState(ss, sheet) : saveGift(ss, sheet, body);
+      } finally {
+        giftLock.releaseLock();
+      }
+    } else if (body.action === 'getFollowerHistory') {
       result = { observations: readFollowerHistory(ss) };
     } else if (body.action === 'saveFollowerCount') {
       result = saveFollowerCount(ss, body.count);
@@ -84,6 +96,187 @@ function doPost(e) {
 function jsonOutput(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+// Gifts occupy only AB:AD, starting at row 3. Source-sheet headers, formulas
+// and other columns stay untouched. Saves may append a real finance snapshot
+// to the existing RevenueHistory; AB is already included by T2/V2 formulas.
+var GIFT_FIRST_ROW = 3;
+var GIFT_FIRST_COLUMN = 28;
+var GIFT_COLUMN_COUNT = 3;
+
+function validateGiftSource(ss, sheet, body) {
+  if (!ss || !sheet || typeof body.spreadsheetId !== 'string' || body.spreadsheetId !== ss.getId()) {
+    throw new Error('ชีทของแถมไม่ตรงกับการตั้งค่า กรุณาตรวจสอบ Spreadsheet ID และโหลดข้อมูลใหม่');
+  }
+  if (typeof body.sourceSheetName !== 'string' || (body.sourceSheetName !== '' && body.sourceSheetName !== sheet.getName())) {
+    throw new Error('ชื่อแท็บของแถมไม่ตรงกับแท็บสินค้าของ Web App กรุณาตรวจสอบการตั้งค่าและโหลดข้อมูลใหม่');
+  }
+}
+
+function giftVersion(values, formulas) {
+  return JSON.stringify([values, formulas]);
+}
+
+function readGiftRows(sheet) {
+  var lastRow = sheet.getLastRow();
+  var width = Math.max(0, Math.min(GIFT_COLUMN_COUNT, sheet.getMaxColumns() - GIFT_FIRST_COLUMN + 1));
+  var rows = [], nextRow = GIFT_FIRST_ROW;
+  var emptyValues = ['', '', ''], emptyFormulas = ['', '', ''];
+  if (width && lastRow >= GIFT_FIRST_ROW) {
+    var range = sheet.getRange(GIFT_FIRST_ROW, GIFT_FIRST_COLUMN, lastRow - GIFT_FIRST_ROW + 1, width);
+    var values = range.getValues(), formulas = range.getFormulas();
+    var foundEmpty = false;
+    for (var i = 0; i < values.length; i++) {
+      var rowValues = values[i].slice(), rowFormulas = formulas[i].slice();
+      while (rowValues.length < GIFT_COLUMN_COUNT) rowValues.push('');
+      while (rowFormulas.length < GIFT_COLUMN_COUNT) rowFormulas.push('');
+      var occupied = rowValues.some(function (value) { return value !== '' && value !== null; }) || rowFormulas.some(function (formula) { return formula !== ''; });
+      if (occupied) {
+        rows.push({ row: GIFT_FIRST_ROW + i, values: rowValues, formulas: rowFormulas, version: giftVersion(rowValues, rowFormulas) });
+      } else if (!foundEmpty) {
+        nextRow = GIFT_FIRST_ROW + i;
+        emptyValues = rowValues; emptyFormulas = rowFormulas;
+        foundEmpty = true;
+      }
+    }
+    if (!foundEmpty) nextRow = lastRow + 1;
+  }
+  return { rows: rows, nextRow: nextRow, nextValues: emptyValues, nextFormulas: emptyFormulas, nextVersion: giftVersion(emptyValues, emptyFormulas) };
+}
+
+function giftStateFromRows(ss, sheet, data) {
+  return {
+    spreadsheetId: ss.getId(), sourceSheetName: sheet.getName(),
+    items: data.rows.map(function (record) {
+      var cost = record.values[0];
+      var validCost = typeof cost === 'number' && isFinite(cost) && cost >= 0 && cost <= 1000000000 && Math.abs(cost * 100 - Math.round(cost * 100)) <= 0.0001;
+      return {
+        row: record.row, cost: validCost ? cost : null,
+        customer: record.values[1] === null ? '' : String(record.values[1]),
+        image: record.values[2] === null ? '' : String(record.values[2]),
+        version: record.version, readOnly: record.formulas.some(function (formula) { return formula !== ''; })
+      };
+    }),
+    nextRow: data.nextRow, nextVersion: data.nextVersion, observedAt: new Date().toISOString()
+  };
+}
+
+function getGiftState(ss, sheet) {
+  var state = giftStateFromRows(ss, sheet, readGiftRows(sheet));
+  state.finance = null;
+  state.snapshot = null;
+  // Reuse authoritative source totals plus active Draft costs. Never add AB
+  // here: the user's T2/V2 formulas already include the gift ledger.
+  try { state.finance = readDraftFinance(ss, sheet); }
+  catch (err) { state.financeWarning = 'อ่านยอดรวมร้านไม่สำเร็จ: ' + String(err); }
+  try { state.snapshot = latestGiftFinanceSnapshot(ss); }
+  catch (err) { state.snapshotWarning = 'อ่านประวัติกราฟไม่สำเร็จ: ' + String(err); }
+  if (!state.snapshotWarning && state.finance && !giftSnapshotMatchesFinance(state.snapshot, state.finance)) {
+    state.snapshotWarning = 'ยอดล่าสุดยังไม่ถูกบันทึกในกราฟ กรุณารอรอบบันทึกถัดไปหรือตรวจสอบ RevenueHistory';
+  }
+  return state;
+}
+
+function giftSnapshotMatchesFinance(snapshot, finance) {
+  return Boolean(snapshot && ['revenue', 'expense', 'profit'].every(function (key) { return snapshot[key] === finance[key]; }));
+}
+
+function giftFinanceHistorySheet(ss) {
+  var history = ss.getSheetByName('RevenueHistory');
+  if (!history) throw new Error('ไม่พบแท็บ RevenueHistory กรุณาตั้งค่าประวัติกราฟก่อน');
+  if (history.getMaxColumns() < 4 || history.getRange(1, 1, 1, 4).getValues()[0].join('|') !== 'Date|Revenue|Profit|Expense') {
+    throw new Error('หัวคอลัมน์ RevenueHistory ต้องเป็น Date / Revenue / Profit / Expense กรุณาตรวจสอบในชีท');
+  }
+  return history;
+}
+
+function latestGiftFinanceSnapshot(ss) {
+  var history = giftFinanceHistorySheet(ss), latest = null;
+  if (history.getLastRow() < 2) return null;
+  history.getRange(2, 1, history.getLastRow() - 1, 4).getValues().forEach(function (row) {
+    var date = row[0] instanceof Date ? row[0] : new Date(row[0]);
+    if (isNaN(date.getTime()) || row.slice(1, 4).some(function (value) { return typeof value !== 'number' || !isFinite(value); })) return;
+    // If two real saves share a millisecond, the later sheet row wins.
+    if (!latest || date.getTime() >= new Date(latest.date).getTime()) latest = { date: date.toISOString(), revenue: row[1], profit: row[2], expense: row[3] };
+  });
+  return latest;
+}
+
+function appendGiftFinanceSnapshot(ss, finance) {
+  var latest = latestGiftFinanceSnapshot(ss);
+  if (giftSnapshotMatchesFinance(latest, finance)) return latest;
+  var history = giftFinanceHistorySheet(ss), row = history.getLastRow() + 1, now = new Date();
+  if (row > history.getMaxRows()) history.insertRowsAfter(history.getMaxRows(), row - history.getMaxRows());
+  history.getRange(row, 1, 1, 4).setValues([[now, finance.revenue, finance.profit, finance.expense]]);
+  SpreadsheetApp.flush();
+  // This deliberately does not call appendDraftFinanceSnapshot: gift saves
+  // must not clear Draft pending flags or recover interrupted transfers.
+  return { date: now.toISOString(), revenue: finance.revenue, profit: finance.profit, expense: finance.expense };
+}
+
+function giftImageUrl(image) {
+  if (typeof image !== 'string' || image.length > 2000) throw new Error('ลิงก์รูปของแถมไม่ถูกต้อง');
+  image = image.trim();
+  if (image === '') return '';
+  // Apps Script does not supply the browser URL constructor. Validate the
+  // protocol and authority explicitly, and never accept credentials or code.
+  var match = image.match(/^https?:\/\/([^/?#]+)(?:[/?#][^\s]*)?$/i);
+  if (!match || /[\s\\<>"'`\u0000-\u001f\u007f]/.test(image) || /%(?![0-9a-f]{2})/i.test(image)) {
+    throw new Error('กรุณาใส่ลิงก์รูปภาพ http:// หรือ https:// ที่ถูกต้องและไม่มีข้อมูลเข้าสู่ระบบ');
+  }
+  var authority = match[1];
+  // Image hosts use DNS names or IPv4. Reject malformed/credential-bearing
+  // authorities instead of allowing Sheets to interpret arbitrary strings.
+  var hostMatch = authority.match(/^([a-z0-9](?:[a-z0-9.-]*[a-z0-9])?)(?::([0-9]{1,5}))?$/i);
+  if (!hostMatch || (hostMatch[2] && (Number(hostMatch[2]) < 1 || Number(hostMatch[2]) > 65535))) {
+    throw new Error('กรุณาใส่ลิงก์รูปภาพ http:// หรือ https:// ที่ถูกต้องและไม่มีข้อมูลเข้าสู่ระบบ');
+  }
+  var host = hostMatch[1];
+  if (host.length > 253 || host.split('.').some(function (label) { return !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(label); }) || (/^[0-9.]+$/.test(host) && (host.split('.').length !== 4 || host.split('.').some(function (part) { return Number(part) > 255; })))) {
+    throw new Error('ชื่อเว็บไซต์ในลิงก์รูปของแถมไม่ถูกต้อง');
+  }
+  return image;
+}
+
+function saveGift(ss, sheet, body) {
+  if (typeof body.row !== 'number' || !isFinite(body.row) || Math.floor(body.row) !== body.row || body.row < GIFT_FIRST_ROW || typeof body.version !== 'string') {
+    throw new Error('แถวของแถมไม่ถูกต้อง กรุณาโหลดข้อมูลใหม่ก่อนบันทึก');
+  }
+  var cost = draftCostCents(body.cost) / 100;
+  if (typeof body.customer !== 'string' || body.customer.length > 200) throw new Error('ชื่อลูกค้าต้องเป็นข้อความไม่เกิน 200 ตัวอักษร');
+  var desired = [cost, body.customer.trim(), giftImageUrl(body.image)];
+  var data = readGiftRows(sheet);
+  var record = data.rows.filter(function (item) { return item.row === body.row; })[0];
+  if (!record && body.row === data.nextRow) record = { row: data.nextRow, values: data.nextValues, formulas: data.nextFormulas, version: data.nextVersion };
+  if (!record) throw new Error('ตำแหน่งของแถมเปลี่ยนแล้ว กรุณาโหลดข้อมูลใหม่ก่อนบันทึก');
+  if (record.formulas.some(function (formula) { return formula !== ''; })) throw new Error('แถวของแถมนี้มีสูตรอยู่ ระบบจะไม่เขียนทับ กรุณาตรวจสอบในชีท');
+  var identical = JSON.stringify(record.values) === JSON.stringify(desired);
+  if (body.version !== record.version && !identical) throw new Error('ของแถมถูกแก้ไขจากที่อื่นแล้ว กรุณาโหลดข้อมูลใหม่ก่อนบันทึก');
+  if (!identical) {
+    // Capacity is extended only after configuration, payload, row and version
+    // validation. Existing cells are never moved, deleted or reformatted.
+    if (body.row > sheet.getMaxRows()) sheet.insertRowsAfter(sheet.getMaxRows(), body.row - sheet.getMaxRows());
+    var lastColumn = GIFT_FIRST_COLUMN + GIFT_COLUMN_COUNT - 1;
+    if (sheet.getMaxColumns() < lastColumn) sheet.insertColumnsAfter(sheet.getMaxColumns(), lastColumn - sheet.getMaxColumns());
+    var transport = desired.slice();
+    [1, 2].forEach(function (column) { if (transport[column] !== '') transport[column] = "'" + transport[column]; });
+    sheet.getRange(body.row, GIFT_FIRST_COLUMN, 1, GIFT_COLUMN_COUNT).setValues([transport]);
+    SpreadsheetApp.flush();
+  }
+  var state = getGiftState(ss, sheet);
+  state.savedRow = body.row;
+  if (state.finance) {
+    try {
+      state.snapshot = appendGiftFinanceSnapshot(ss, state.finance);
+      delete state.snapshotWarning;
+    } catch (err) {
+      state.snapshotWarning = 'บันทึกของแถมแล้ว แต่บันทึกจุดกราฟไม่สำเร็จ: ' + String(err);
+    }
+  } else {
+    state.snapshotWarning = 'บันทึกของแถมแล้ว แต่ยังไม่ได้บันทึกจุดกราฟ เนื่องจากอ่านยอดรวมร้านไม่สำเร็จ';
+  }
+  return state;
 }
 
 // Manual follower history is isolated from all product and finance cells.

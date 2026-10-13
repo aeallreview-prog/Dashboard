@@ -66,10 +66,17 @@ function applyDraftFinance(finance) {
   note.classList.remove('is-error');
 }
 
-function showDraftFinanceError(err) {
+function showDraftFinanceError(err, observedAt) {
+  const failedAt = Date.parse(observedAt);
+  // A failed older read must not erase newer confirmed store totals.
+  if (Number.isFinite(failedAt)) {
+    if (failedAt < latestFinanceObservedAt) return;
+    latestFinanceObservedAt = failedAt;
+    draftFinanceRevision += 1;
+  }
   ['revenueVal', 'expenseVal', 'profitVal'].forEach(id => { document.getElementById(id).textContent = '–'; });
   const note = document.getElementById('draftFinanceStatus');
-  note.textContent = 'ยังยืนยันยอดรวมแบบร่างไม่ได้: ' + err.message;
+  note.textContent = 'ยังยืนยันยอดรวมร้านไม่ได้: ' + err.message;
   note.classList.add('is-error');
 }
 
@@ -803,7 +810,8 @@ async function loadData() {
       if (!window.SNTDrafts) throw new Error('กรุณาโหลดหน้าเว็บใหม่เพื่อใช้ระบบแบบร่าง');
       await window.SNTDrafts.refresh();
     } catch (err) {
-      if (sequence === dataLoadSequence && financeRevision === draftFinanceRevision) showDraftFinanceError(err);
+      const failedRevision = Number.isFinite(err.financeRevision) ? err.financeRevision : financeRevision;
+      if (sequence === dataLoadSequence && failedRevision === draftFinanceRevision) showDraftFinanceError(err);
     }
   } catch (err) {
     console.error(err);
@@ -818,7 +826,7 @@ async function loadData() {
 function startPolling() {
   if (pollTimer) clearInterval(pollTimer);
   const ms = Math.max(5, Number(config.interval) || 1800) * 1000;
-  pollTimer = setInterval(() => { loadData(); loadRevenueHistory(); }, ms);
+  pollTimer = setInterval(() => { loadData(); loadRevenueHistory(); refreshActiveGifts(); }, ms);
 }
 
 // ---------- settings modal ----------
@@ -858,10 +866,18 @@ function activateView(view) {
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + view));
 }
 
+function refreshActiveGifts() {
+  if (!window.SNTGifts || !isAlreadyLoggedIn() || !document.getElementById('view-gifts').classList.contains('active')) return;
+  window.SNTGifts.init();
+  // The gifts page keeps its own actionable error; product loading stays independent.
+  window.SNTGifts.refresh().catch(() => {});
+}
+
 document.querySelectorAll('.nav-item').forEach(btn => {
   btn.addEventListener('click', () => {
     activateView(btn.dataset.view);
     persistActiveView(btn.dataset.view);
+    refreshActiveGifts();
     document.querySelector('.sidebar').classList.remove('open'); // close mobile dropdown after picking
   });
 });
@@ -1084,10 +1100,13 @@ document.getElementById('settingsSave').addEventListener('click', () => {
   cachedAutoStatusCol = null; // sheet/column settings changed — re-detect once, fresh
   latestFinanceObservedAt = 0;
   if (window.SNTDrafts) window.SNTDrafts.resetForConfig();
+  if (window.SNTGifts) window.SNTGifts.resetForConfig();
   savedFinanceSnapshots = [];
   historyRows = [];
+  historyLoadSequence += 1;
   saveConfig(config);
   closeSettings();
+  refreshActiveGifts();
   loadData();
   loadRevenueHistory();
   startPolling();
@@ -1095,6 +1114,7 @@ document.getElementById('settingsSave').addEventListener('click', () => {
 
 // ---------- trend charts (revenue + profit + expense) ----------
 let historyRows = []; // [{date, revenue, profit, expense}], sorted ascending
+let historyLoadSequence = 0;
 let savedFinanceSnapshots = []; // Actual saved observations; protects against the public feed's cache lag.
 let trendRange = 'week';
 let customRange = null; // { from: Date, to: Date } | null — overrides trendRange when set
@@ -1142,10 +1162,15 @@ function parseGvizDate(cell) {
 }
 
 async function loadRevenueHistory() {
+  const sequence = ++historyLoadSequence;
+  const sourceKey = [config.sheetId, config.sheetName || '', config.webAppUrl || ''].join('\n');
+  const isCurrent = () => sequence === historyLoadSequence &&
+    sourceKey === [config.sheetId, config.sheetName || '', config.webAppUrl || ''].join('\n');
   try {
     const res = await fetch(buildHistoryUrl(config), { cache: 'no-store' });
     if (!res.ok) throw new Error('no history sheet');
     const text = await res.text();
+    if (!isCurrent()) return;
     const table = parseGviz(text);
     const rows = table.rows || [];
     historyRows = mergeFinanceHistory(rows.map(r => {
@@ -1159,6 +1184,7 @@ async function loadRevenueHistory() {
     renderProfitChart();
     renderExpenseChart();
   } catch (err) {
+    if (!isCurrent()) return;
     console.warn('revenue history not available yet:', err.message);
     if (savedFinanceSnapshots.length) {
       historyRows = mergeFinanceHistory(historyRows);
@@ -1937,6 +1963,8 @@ document.getElementById('financeFormBackdrop').addEventListener('click', (e) => 
 // ---------- init ----------
 function initApp() {
   populateColumnOptions();
+  if (window.SNTGifts) window.SNTGifts.init();
+  refreshActiveGifts();
   loadData();
   loadRevenueHistory();
   startPolling();

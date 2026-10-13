@@ -231,7 +231,8 @@
   async function refresh() {
     ensureConfig();
     if (refreshRequest) return refreshRequest.promise;
-    const request = { epoch: configEpoch, configKey, stateVersion, promise: null };
+    const request = { epoch: configEpoch, configKey, stateVersion,
+      financeRevision: typeof draftFinanceRevision === 'number' ? draftFinanceRevision : null, promise: null };
     refreshRequest = request;
     request.promise = (async () => {
       try {
@@ -247,7 +248,9 @@
         feedback(loadError, true);
         renderList();
         renderPicker();
-        throw new Error(loadError);
+        const failure = new Error(loadError);
+        failure.financeRevision = request.financeRevision;
+        throw failure;
       } finally {
         if (refreshRequest === request) refreshRequest = null;
         renderControls();

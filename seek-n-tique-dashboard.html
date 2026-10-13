@@ -498,6 +498,22 @@ button:disabled { opacity: .55; cursor: wait; }
   .draft-feedback { margin-left: 16px; margin-right: 16px; }
 }
 
+/* Gifts share the inventory table layout but write only AB:AD. */
+#view-gifts .panel-head { align-items: flex-start; gap: 14px; }
+#view-gifts .panel-head > div { min-width: 0; }
+#view-gifts .panel-head p { line-height: 1.7; }
+#giftRefreshBtn { flex-shrink: 0; }
+#giftForm { display: grid; grid-template-columns: minmax(0, 2fr) minmax(160px, 1fr); gap: 0 16px; align-items: start; }
+#giftForm input { background: #fff; }
+.gift-customer-field { grid-column: 1 / -1; }
+#giftForm :focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+#giftCancelBtn[hidden] { display: none; }
+#giftList .gift-customer-cell { min-width: 160px; max-width: 300px; overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  #view-gifts .panel-head { flex-wrap: wrap; }
+  #giftForm { grid-template-columns: minmax(0, 1fr); }
+}
+
 /* Login gate */
 .login-backdrop {
   position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px;
@@ -594,6 +610,7 @@ button:disabled { opacity: .55; cursor: wait; }
       <button class="nav-item active" data-view="dashboard" title="Dashboard"><span class="material-symbols-outlined nav-icon">table_chart_view</span><span>Dashboard</span></button>
       <button class="nav-item" data-view="search" title="Search"><span class="material-symbols-outlined nav-icon">content_paste_search</span><span>Search</span></button>
       <button class="nav-item" data-view="drafts" title="Draft"><span class="material-symbols-outlined nav-icon">draft</span><span>Draft</span></button>
+      <button class="nav-item" data-view="gifts" title="Free Gift"><span class="nav-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h18v4H3zM5 12v9h14v-9M12 8v13"/><path d="M12 8H8a3 3 0 1 1 3-3l1 3Zm0 0h4a3 3 0 1 0-3-3l-1 3Z"/></svg></span><span>Free Gift</span></button>
       <button class="nav-item" data-view="calculate" title="Calculate"><span class="material-symbols-outlined nav-icon">calculate</span><span>Calculate</span></button>
       <button class="nav-item" data-view="templates" title="Templates"><span class="material-symbols-outlined nav-icon">sticky_note_2</span><span>Templates</span></button>
     </nav>
@@ -872,6 +889,48 @@ button:disabled { opacity: .55; cursor: wait; }
       </div>
     </div>
 
+    <div class="view" id="view-gifts">
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>Free Gift</h2>
+            <p>เก็บต้นทุน รูป และชื่อลูกค้าที่ได้รับของแถม แยกจากรายการสินค้า</p>
+          </div>
+          <button class="ghost" id="giftRefreshBtn" type="button">โหลดล่าสุด</button>
+        </div>
+        <div class="draft-summary">
+          <span id="giftCount">กำลังโหลดของแถม…</span>
+          <span>ต้นทุนของแถมรวม <strong id="giftTotal">—</strong></span>
+        </div>
+        <div class="draft-entry">
+          <h3 id="giftFormTitle">เพิ่มของแถม</h3>
+          <form id="giftForm" novalidate>
+            <div class="field">
+              <label for="giftImage">ลิงก์รูป (AD)</label>
+              <input id="giftImage" type="url" inputmode="url" maxlength="2000" placeholder="https://…" autocomplete="off" disabled>
+              <small>ใช้ลิงก์รูปหรือ Google Drive ที่เปิดให้ดูได้ เว้นว่างไว้ก่อนได้</small>
+            </div>
+            <div class="field">
+              <label for="giftCost">ต้นทุนของแถม (AB) · บาท</label>
+              <input id="giftCost" type="number" min="0" max="1000000000" step="0.01" inputmode="decimal" required placeholder="เช่น 50.00" disabled>
+            </div>
+            <div class="field gift-customer-field">
+              <label for="giftCustomer">ชื่อลูกค้าที่ได้รับของแถม (AC)</label>
+              <input id="giftCustomer" type="text" maxlength="200" placeholder="ยังไม่ได้แถม เว้นว่างไว้ก่อนได้" autocomplete="off" disabled>
+            </div>
+            <div class="draft-image-preview" id="giftImagePreview" hidden></div>
+            <div class="draft-form-actions">
+              <button type="submit" id="giftSaveBtn" disabled>บันทึกของแถม</button>
+              <button type="button" class="ghost" id="giftCancelBtn" hidden>ยกเลิกแก้ไข</button>
+            </div>
+          </form>
+        </div>
+        <p class="draft-feedback" id="giftFeedback" role="status" aria-live="polite"></p>
+        <div class="draft-table-wrap" id="giftList" role="region" aria-label="ตารางของแถม เลื่อนแนวนอนเพื่อดูครบทุกคอลัมน์" tabindex="0"><p class="empty">กำลังโหลดของแถม…</p></div>
+        <nav class="pagination draft-pagination" id="giftPagination" aria-label="เปลี่ยนหน้าของแถม" hidden></nav>
+      </div>
+    </div>
+
     <div class="view" id="view-calculate">
 
     <div class="panel">
@@ -1060,7 +1119,8 @@ button:disabled { opacity: .55; cursor: wait; }
   </div>
 </div>
 
-<script src="drafts.js?v=20261012-draft-table-order"></script>
+<script src="drafts.js?v=20261013-gift-finance"></script>
+<script src="gifts.js?v=20261013-gift-finance"></script>
 <script>
 /* seek n tique — live sales dashboard
  * Reads directly from a public Google Sheet in the browser (no server needed).
@@ -1127,10 +1187,17 @@ function applyDraftFinance(finance) {
   note.classList.remove('is-error');
 }
 
-function showDraftFinanceError(err) {
+function showDraftFinanceError(err, observedAt) {
+  const failedAt = Date.parse(observedAt);
+  // A failed older read must not erase newer confirmed store totals.
+  if (Number.isFinite(failedAt)) {
+    if (failedAt < latestFinanceObservedAt) return;
+    latestFinanceObservedAt = failedAt;
+    draftFinanceRevision += 1;
+  }
   ['revenueVal', 'expenseVal', 'profitVal'].forEach(id => { document.getElementById(id).textContent = '–'; });
   const note = document.getElementById('draftFinanceStatus');
-  note.textContent = 'ยังยืนยันยอดรวมแบบร่างไม่ได้: ' + err.message;
+  note.textContent = 'ยังยืนยันยอดรวมร้านไม่ได้: ' + err.message;
   note.classList.add('is-error');
 }
 
@@ -1864,7 +1931,8 @@ async function loadData() {
       if (!window.SNTDrafts) throw new Error('กรุณาโหลดหน้าเว็บใหม่เพื่อใช้ระบบแบบร่าง');
       await window.SNTDrafts.refresh();
     } catch (err) {
-      if (sequence === dataLoadSequence && financeRevision === draftFinanceRevision) showDraftFinanceError(err);
+      const failedRevision = Number.isFinite(err.financeRevision) ? err.financeRevision : financeRevision;
+      if (sequence === dataLoadSequence && failedRevision === draftFinanceRevision) showDraftFinanceError(err);
     }
   } catch (err) {
     console.error(err);
@@ -1879,7 +1947,7 @@ async function loadData() {
 function startPolling() {
   if (pollTimer) clearInterval(pollTimer);
   const ms = Math.max(5, Number(config.interval) || 1800) * 1000;
-  pollTimer = setInterval(() => { loadData(); loadRevenueHistory(); }, ms);
+  pollTimer = setInterval(() => { loadData(); loadRevenueHistory(); refreshActiveGifts(); }, ms);
 }
 
 // ---------- settings modal ----------
@@ -1919,10 +1987,18 @@ function activateView(view) {
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + view));
 }
 
+function refreshActiveGifts() {
+  if (!window.SNTGifts || !isAlreadyLoggedIn() || !document.getElementById('view-gifts').classList.contains('active')) return;
+  window.SNTGifts.init();
+  // The gifts page keeps its own actionable error; product loading stays independent.
+  window.SNTGifts.refresh().catch(() => {});
+}
+
 document.querySelectorAll('.nav-item').forEach(btn => {
   btn.addEventListener('click', () => {
     activateView(btn.dataset.view);
     persistActiveView(btn.dataset.view);
+    refreshActiveGifts();
     document.querySelector('.sidebar').classList.remove('open'); // close mobile dropdown after picking
   });
 });
@@ -2145,10 +2221,13 @@ document.getElementById('settingsSave').addEventListener('click', () => {
   cachedAutoStatusCol = null; // sheet/column settings changed — re-detect once, fresh
   latestFinanceObservedAt = 0;
   if (window.SNTDrafts) window.SNTDrafts.resetForConfig();
+  if (window.SNTGifts) window.SNTGifts.resetForConfig();
   savedFinanceSnapshots = [];
   historyRows = [];
+  historyLoadSequence += 1;
   saveConfig(config);
   closeSettings();
+  refreshActiveGifts();
   loadData();
   loadRevenueHistory();
   startPolling();
@@ -2156,6 +2235,7 @@ document.getElementById('settingsSave').addEventListener('click', () => {
 
 // ---------- trend charts (revenue + profit + expense) ----------
 let historyRows = []; // [{date, revenue, profit, expense}], sorted ascending
+let historyLoadSequence = 0;
 let savedFinanceSnapshots = []; // Actual saved observations; protects against the public feed's cache lag.
 let trendRange = 'week';
 let customRange = null; // { from: Date, to: Date } | null — overrides trendRange when set
@@ -2203,10 +2283,15 @@ function parseGvizDate(cell) {
 }
 
 async function loadRevenueHistory() {
+  const sequence = ++historyLoadSequence;
+  const sourceKey = [config.sheetId, config.sheetName || '', config.webAppUrl || ''].join('\n');
+  const isCurrent = () => sequence === historyLoadSequence &&
+    sourceKey === [config.sheetId, config.sheetName || '', config.webAppUrl || ''].join('\n');
   try {
     const res = await fetch(buildHistoryUrl(config), { cache: 'no-store' });
     if (!res.ok) throw new Error('no history sheet');
     const text = await res.text();
+    if (!isCurrent()) return;
     const table = parseGviz(text);
     const rows = table.rows || [];
     historyRows = mergeFinanceHistory(rows.map(r => {
@@ -2220,6 +2305,7 @@ async function loadRevenueHistory() {
     renderProfitChart();
     renderExpenseChart();
   } catch (err) {
+    if (!isCurrent()) return;
     console.warn('revenue history not available yet:', err.message);
     if (savedFinanceSnapshots.length) {
       historyRows = mergeFinanceHistory(historyRows);
@@ -2998,6 +3084,8 @@ document.getElementById('financeFormBackdrop').addEventListener('click', (e) => 
 // ---------- init ----------
 function initApp() {
   populateColumnOptions();
+  if (window.SNTGifts) window.SNTGifts.init();
+  refreshActiveGifts();
   loadData();
   loadRevenueHistory();
   startPolling();
