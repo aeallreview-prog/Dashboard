@@ -1399,10 +1399,10 @@ function renderTrendChart() {
   renderChart('revenue', 'trendSvgHolder', 'trendTooltip', '#1a63a8', 'รายได้');
 }
 function renderProfitChart() {
-  renderChart('profit', 'profitSvgHolder', 'profitTooltip', '#d4af37', 'กำไร');
+  renderChart('profit', 'profitSvgHolder', 'profitTooltip', '#f15e22', 'กำไร');
 }
 function renderExpenseChart() {
-  renderChart('expense', 'expenseSvgHolder', 'expenseTooltip', '#dc2626', 'รายจ่าย');
+  renderChart('expense', 'expenseSvgHolder', 'expenseTooltip', '#6e7c89', 'รายจ่าย');
 }
 
 // One source of truth for every line chart, including followers loaded later.

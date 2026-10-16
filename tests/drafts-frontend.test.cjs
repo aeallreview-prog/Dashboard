@@ -131,7 +131,7 @@ test('duplicate saved snapshots do not double-count and null legacy expenses are
 test('one actual saved point displays immediately on all three financial charts', () => {
   const h = makeChartHarness();
   h.run(`addFinanceSnapshot({date:'2026-10-12T05:00:00.000Z', revenue:0, expense:0, profit:0})`);
-  for (const [id, color] of [['trendSvgHolder', '#1a63a8'], ['profitSvgHolder', '#d4af37'], ['expenseSvgHolder', '#dc2626']]) {
+  for (const [id, color] of [['trendSvgHolder', '#1a63a8'], ['profitSvgHolder', '#f15e22'], ['expenseSvgHolder', '#6e7c89']]) {
     const svg = h.get(id).innerHTML;
     assert.match(svg, /<svg/);
     assert.match(svg, /class="chart-dot"/);

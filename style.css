@@ -21,7 +21,9 @@
 
 * { box-sizing: border-box; }
 /* Instagram follower history */
-.follower-panel .panel-head a { color: var(--blue); font-size: 13px; }
+.follower-panel .trend-subhead { padding-bottom: 12px; }
+.follower-panel .trend-subhead h3 { white-space: normal; line-height: 1.3; }
+.follower-panel .trend-subhead a { display: inline-block; margin-top: 5px; color: var(--blue); font-size: 13px; }
 .follower-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 0 24px; }
 .follower-summary strong { font-size: 32px; color: var(--blue); margin-right: 8px; }
 .follower-summary span, .follower-summary p { color: var(--muted); font-size: 13px; }
@@ -39,6 +41,11 @@
 #followerInputHint, #followerSaveStatus { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
 #followerSaveStatus[data-error="true"] { color: #b42318; }
 #followerSaveStatus:empty { display: none; }
+@media (max-width: 720px) {
+  .follower-summary { padding: 0 14px; }
+  .follower-note { padding: 0 14px 20px; }
+  .follower-manual { margin: 0 14px 24px; }
+}
 
 body {
   margin: 0;
@@ -198,18 +205,18 @@ button:disabled { opacity: .55; cursor: wait; }
 /* Donut chart panel */
 .donut-wrap { display: flex; flex-direction: column; align-items: center; gap: 18px; padding: 6px 20px 22px; }
 .donut {
-  width: 172px; height: 172px; border-radius: 50%; flex: none;
+  width: min(280px, 100%); aspect-ratio: 1; border-radius: 50%; flex: none;
   background: conic-gradient(var(--conic, #e9eef1) 0deg);
   display: flex; align-items: center; justify-content: center;
   transition: background 1s ease;
 }
 .donut-center {
-  width: 108px; height: 108px; border-radius: 50%; background: var(--card);
+  width: 63%; aspect-ratio: 1; border-radius: 50%; background: var(--card);
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   box-shadow: inset 0 0 0 1px var(--line);
 }
-.donut-center strong { font: 700 24px/1 'DM Sans', sans-serif; letter-spacing: -.05em; }
-.donut-center span { margin-top: 3px; font-size: 9px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; }
+.donut-center strong { font: 700 32px/1 'DM Sans', sans-serif; letter-spacing: -.05em; }
+.donut-center span { margin-top: 3px; font-size: 11px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; }
 .legend { display: flex; flex-direction: column; gap: 10px; width: 100%; min-width: 0; }
 .legend-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12px; }
 .legend-row .lg-left { display: flex; align-items: center; gap: 8px; color: var(--ink); font-weight: 500; }
