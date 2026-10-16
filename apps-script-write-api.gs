@@ -98,12 +98,12 @@ function jsonOutput(obj) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-// Gifts occupy only AB:AD, starting at row 3. Source-sheet headers, formulas
+// Gifts occupy only AB:AE, starting at row 3. Source-sheet headers, formulas
 // and other columns stay untouched. Saves may append a real finance snapshot
 // to the existing RevenueHistory; AB is already included by T2/V2 formulas.
 var GIFT_FIRST_ROW = 3;
 var GIFT_FIRST_COLUMN = 28;
-var GIFT_COLUMN_COUNT = 3;
+var GIFT_COLUMN_COUNT = 4;
 
 function validateGiftSource(ss, sheet, body) {
   if (!ss || !sheet || typeof body.spreadsheetId !== 'string' || body.spreadsheetId !== ss.getId()) {
@@ -122,7 +122,7 @@ function readGiftRows(sheet) {
   var lastRow = sheet.getLastRow();
   var width = Math.max(0, Math.min(GIFT_COLUMN_COUNT, sheet.getMaxColumns() - GIFT_FIRST_COLUMN + 1));
   var rows = [], nextRow = GIFT_FIRST_ROW;
-  var emptyValues = ['', '', ''], emptyFormulas = ['', '', ''];
+  var emptyValues = ['', '', '', ''], emptyFormulas = ['', '', '', ''];
   if (width && lastRow >= GIFT_FIRST_ROW) {
     var range = sheet.getRange(GIFT_FIRST_ROW, GIFT_FIRST_COLUMN, lastRow - GIFT_FIRST_ROW + 1, width);
     var values = range.getValues(), formulas = range.getFormulas();
@@ -147,7 +147,7 @@ function readGiftRows(sheet) {
 
 function giftStateFromRows(ss, sheet, data) {
   return {
-    spreadsheetId: ss.getId(), sourceSheetName: sheet.getName(),
+    spreadsheetId: ss.getId(), sourceSheetName: sheet.getName(), notesSupported: true,
     items: data.rows.map(function (record) {
       var cost = record.values[0];
       var validCost = typeof cost === 'number' && isFinite(cost) && cost >= 0 && cost <= 1000000000 && Math.abs(cost * 100 - Math.round(cost * 100)) <= 0.0001;
@@ -155,6 +155,7 @@ function giftStateFromRows(ss, sheet, data) {
         row: record.row, cost: validCost ? cost : null,
         customer: record.values[1] === null ? '' : String(record.values[1]),
         image: record.values[2] === null ? '' : String(record.values[2]),
+        note: record.values[3] === null ? '' : String(record.values[3]),
         version: record.version, readOnly: record.formulas.some(function (formula) { return formula !== ''; })
       };
     }),
@@ -245,23 +246,29 @@ function saveGift(ss, sheet, body) {
   }
   var cost = draftCostCents(body.cost) / 100;
   if (typeof body.customer !== 'string' || body.customer.length > 200) throw new Error('ชื่อลูกค้าต้องเป็นข้อความไม่เกิน 200 ตัวอักษร');
+  var hasNote = Object.prototype.hasOwnProperty.call(body, 'note');
+  if (hasNote && (typeof body.note !== 'string' || body.note.length > 500)) throw new Error('โน้ตของแถมต้องเป็นข้อความไม่เกิน 500 ตัวอักษร');
   var desired = [cost, body.customer.trim(), giftImageUrl(body.image)];
   var data = readGiftRows(sheet);
   var record = data.rows.filter(function (item) { return item.row === body.row; })[0];
   if (!record && body.row === data.nextRow) record = { row: data.nextRow, values: data.nextValues, formulas: data.nextFormulas, version: data.nextVersion };
   if (!record) throw new Error('ตำแหน่งของแถมเปลี่ยนแล้ว กรุณาโหลดข้อมูลใหม่ก่อนบันทึก');
   if (record.formulas.some(function (formula) { return formula !== ''; })) throw new Error('แถวของแถมนี้มีสูตรอยู่ ระบบจะไม่เขียนทับ กรุณาตรวจสอบในชีท');
+  // Older clients omit note entirely. Preserve its raw value and do not write
+  // AE in that case; an explicit empty string is the request to clear a note.
+  desired.push(hasNote ? body.note.trim() : record.values[3]);
   var identical = JSON.stringify(record.values) === JSON.stringify(desired);
   if (body.version !== record.version && !identical) throw new Error('ของแถมถูกแก้ไขจากที่อื่นแล้ว กรุณาโหลดข้อมูลใหม่ก่อนบันทึก');
   if (!identical) {
     // Capacity is extended only after configuration, payload, row and version
     // validation. Existing cells are never moved, deleted or reformatted.
     if (body.row > sheet.getMaxRows()) sheet.insertRowsAfter(sheet.getMaxRows(), body.row - sheet.getMaxRows());
-    var lastColumn = GIFT_FIRST_COLUMN + GIFT_COLUMN_COUNT - 1;
+    var writeWidth = hasNote ? GIFT_COLUMN_COUNT : GIFT_COLUMN_COUNT - 1;
+    var lastColumn = GIFT_FIRST_COLUMN + writeWidth - 1;
     if (sheet.getMaxColumns() < lastColumn) sheet.insertColumnsAfter(sheet.getMaxColumns(), lastColumn - sheet.getMaxColumns());
-    var transport = desired.slice();
-    [1, 2].forEach(function (column) { if (transport[column] !== '') transport[column] = "'" + transport[column]; });
-    sheet.getRange(body.row, GIFT_FIRST_COLUMN, 1, GIFT_COLUMN_COUNT).setValues([transport]);
+    var transport = desired.slice(0, writeWidth);
+    [1, 2, 3].forEach(function (column) { if (column < transport.length && transport[column] !== '') transport[column] = "'" + transport[column]; });
+    sheet.getRange(body.row, GIFT_FIRST_COLUMN, 1, writeWidth).setValues([transport]);
     SpreadsheetApp.flush();
   }
   var state = getGiftState(ss, sheet);

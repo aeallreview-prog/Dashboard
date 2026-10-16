@@ -589,17 +589,19 @@ button:disabled { opacity: .55; cursor: wait; }
   .draft-feedback { margin-left: 16px; margin-right: 16px; }
 }
 
-/* Gifts share the inventory table layout but write only AB:AD. */
+/* Gifts share the inventory table layout but write only AB:AE. */
 #view-gifts .panel-head { align-items: flex-start; gap: 14px; }
 #view-gifts .panel-head > div { min-width: 0; }
 #view-gifts .panel-head p { line-height: 1.7; }
 #giftRefreshBtn { flex-shrink: 0; }
 #giftForm { display: grid; grid-template-columns: minmax(0, 2fr) minmax(160px, 1fr); gap: 0 16px; align-items: start; }
 #giftForm input { background: #fff; }
-.gift-customer-field { grid-column: 1 / -1; }
+#giftForm textarea { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); font: 500 13px 'DM Sans', sans-serif; line-height: 1.6; color: var(--ink); background: #fff; resize: vertical; }
+.gift-customer-field, .gift-note-field { grid-column: 1 / -1; }
 #giftForm :focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
 #giftCancelBtn[hidden] { display: none; }
 #giftList .gift-customer-cell { min-width: 160px; max-width: 300px; overflow-wrap: anywhere; }
+#giftList .gift-note-cell { min-width: 180px; max-width: 320px; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; }
 @media (max-width: 600px) {
   #view-gifts .panel-head { flex-wrap: wrap; }
   #giftForm { grid-template-columns: minmax(0, 1fr); }

@@ -8,10 +8,10 @@ const vm = require('node:vm');
 
 const source = fs.readFileSync(path.resolve(__dirname, '..', 'gifts.js'), 'utf8');
 const plain = value => JSON.parse(JSON.stringify(value));
-const item = (row, overrides = {}) => ({ row, cost: 25, customer: '', image: '', version: 'row-' + row, readOnly: false, ...overrides });
+const item = (row, overrides = {}) => ({ row, cost: 25, customer: '', image: '', note: '', version: 'row-' + row, readOnly: false, ...overrides });
 const finance = (overrides = {}) => ({ revenue: 1000, expense: 600, profit: 400, draftCost: 100, observedAt: '2026-10-13T10:00:00.000Z', ...overrides });
 const snapshot = (overrides = {}) => ({ date: '2026-10-13T10:00:00.000Z', revenue: 1000, expense: 600, profit: 400, ...overrides });
-const state = (items = [], overrides = {}) => ({ spreadsheetId: 'sheet-a', sourceSheetName: 'สินค้า', items, nextRow: Math.max(2, ...items.map(entry => entry.row)) + 1, nextVersion: 'empty', observedAt: '2026-10-13T10:00:00.000Z', finance: finance(), snapshot: overrides.savedRow ? snapshot() : null, ...overrides });
+const state = (items = [], overrides = {}) => ({ spreadsheetId: 'sheet-a', sourceSheetName: 'สินค้า', items, notesSupported: true, nextRow: Math.max(2, ...items.map(entry => entry.row)) + 1, nextVersion: 'empty', observedAt: '2026-10-13T10:00:00.000Z', finance: finance(), snapshot: overrides.savedRow ? snapshot() : null, ...overrides });
 
 function deferred() {
   let resolve;
@@ -70,10 +70,11 @@ function harness(initial = state()) {
   return {
     api, get, calls, config, context, window, financeCalls, snapshotCalls, financeErrors,
     handler(value) { handler = value; },
-    form(cost, customer = '', image = '') {
+    form(cost, customer = '', image = '', note = '') {
       get('giftCost').value = String(cost);
       get('giftCustomer').value = customer;
       get('giftImage').value = image;
+      get('giftNote').value = note;
     },
     submit() { return get('giftForm').emit('submit'); },
     edit(row) { return get('giftList').emit('click', { target: { closest: () => ({ dataset: { giftEdit: String(row) } }) } }); },
@@ -103,7 +104,7 @@ test('new gift saves required cost and optional customer/image to the captured s
   h.form('12.50', ' คุณเอ ', ' https://example.test/gift.jpg ');
   h.handler(async (action, payload) => {
     assert.equal(action, 'saveGift');
-    assert.deepEqual(plain(payload), { spreadsheetId: 'sheet-a', sourceSheetName: 'สินค้า', row: 4, version: 'empty', cost: 12.5, customer: 'คุณเอ', image: 'https://example.test/gift.jpg' });
+    assert.deepEqual(plain(payload), { spreadsheetId: 'sheet-a', sourceSheetName: 'สินค้า', row: 4, version: 'empty', cost: 12.5, customer: 'คุณเอ', image: 'https://example.test/gift.jpg', note: '' });
     return state([item(3), item(4, { ...payload, version: 'saved' })], { savedRow: 4 });
   });
   await h.submit();
@@ -122,7 +123,7 @@ test('zero cost and blank customer/image are valid; resolved fallback sheet name
   h.form('0');
   h.handler(async (_action, payload) => state([item(3, { ...payload, version: 'saved' })], { savedRow: 3 }));
   await h.submit();
-  assert.deepEqual(h.calls[1].payload, { spreadsheetId: 'sheet-a', sourceSheetName: 'สินค้า', row: 3, version: 'empty', cost: 0, customer: '', image: '' });
+  assert.deepEqual(h.calls[1].payload, { spreadsheetId: 'sheet-a', sourceSheetName: 'สินค้า', row: 3, version: 'empty', cost: 0, customer: '', image: '', note: '' });
   assert.equal(h.get('giftTotal').textContent, '฿0');
   assert.match(h.get('giftList').innerHTML, /ยังไม่ได้แถมให้ลูกค้า/);
 });
@@ -270,7 +271,7 @@ test('failed refresh retains visible rows but marks totals unavailable and block
 test('double submit is blocked and an uncertain create retries identical values/row/version after refresh', async () => {
   const h = harness();
   await h.api.refresh();
-  h.form('25', 'A', 'https://example.test/a.jpg');
+  h.form('25', 'A', 'https://example.test/a.jpg', 'โน้ตเดิม\nบรรทัดที่สอง');
   const wait = deferred();
   h.handler(async () => wait.promise);
   const first = h.submit();
@@ -284,6 +285,8 @@ test('double submit is blocked and an uncertain create retries identical values/
   const attempted = h.calls[1].payload;
   assert.equal(h.get('giftCost').value, '25');
   assert.equal(h.get('giftCost').disabled, true);
+  assert.equal(h.get('giftNote').value, 'โน้ตเดิม\nบรรทัดที่สอง');
+  assert.equal(h.get('giftNote').disabled, true);
   assert.equal(h.get('giftSaveBtn').disabled, false);
   assert.match(h.get('giftFeedback').textContent, /รายการเดิมโดยไม่เพิ่มแถวใหม่/);
   h.handler(async action => {
@@ -300,6 +303,138 @@ test('double submit is blocked and an uncertain create retries identical values/
   assert.deepEqual(h.calls.at(-1).payload, attempted);
   assert.equal(h.get('giftCount').textContent, '1 ชิ้น');
   assert.equal(h.get('giftFeedback').textContent, 'บันทึกของแถมแล้ว');
+});
+
+test('optional AE notes save trimmed outer whitespace while preserving newlines and literal formula-like text', async () => {
+  const h = harness();
+  await h.api.refresh();
+  const note = '=SUM(AB3:AB4)\nแถมพร้อมคำสั่งซื้อแรก';
+  h.form(25, 'A', '', '  ' + note + '\n  ');
+  h.handler(async (_action, payload) => {
+    assert.equal(payload.note, note);
+    return state([item(3, { ...payload, version: 'saved' })], { savedRow: 3 });
+  });
+  await h.submit();
+  assert.equal(h.calls.at(-1).payload.note, note);
+  assert.equal(h.get('giftNote').value, '');
+  assert.match(h.get('giftList').innerHTML, /<th scope="col">โน้ต<\/th>/);
+  assert.ok(h.get('giftList').innerHTML.includes('<td class="gift-note-cell">' + note + '</td>'));
+  assert.equal(h.get('giftFeedback').textContent, 'บันทึกของแถมแล้ว');
+});
+
+test('editing populates notes, clearing explicitly submits empty string, and cancel/reset clear the note field', async () => {
+  const existing = item(3, { note: 'เก็บไว้\nก่อนส่ง', version: 'old' });
+  const h = harness(state([existing]));
+  await h.api.refresh();
+  await h.edit(3);
+  assert.equal(h.get('giftNote').value, existing.note);
+  await h.get('giftCancelBtn').emit('click');
+  assert.equal(h.get('giftNote').value, '');
+  await h.edit(3);
+  h.get('giftNote').value = '';
+  h.handler(async (_action, payload) => {
+    assert.equal(payload.note, '');
+    assert.equal(payload.version, 'old');
+    return state([item(3, { ...payload, version: 'new' })], { savedRow: 3 });
+  });
+  await h.submit();
+  assert.equal(h.get('giftNote').value, '');
+  assert.match(h.get('giftList').innerHTML, /gift-note-cell"><span class="product-draft-note">—/);
+  h.get('giftNote').value = 'ค่าเก่าของชีทเดิม';
+  h.config.sheetId = 'sheet-b';
+  h.api.resetForConfig();
+  assert.equal(h.get('giftNote').value, '');
+  assert.equal(h.get('giftNote').disabled, true);
+});
+
+test('note length uses the raw 500-character limit before trimming and accepts exactly 500', async () => {
+  const h = harness();
+  await h.api.refresh();
+  for (const note of ['ก'.repeat(501), ' '.repeat(500) + 'ก', '😀'.repeat(251)]) {
+    h.form(25, '', '', note);
+    await h.submit();
+    assert.match(h.get('giftFeedback').textContent, /โน้ต.*500/);
+    assert.equal(h.calls.length, 1);
+    assert.equal(h.get('giftNote').value, note);
+    assert.equal(h.get('giftNote').disabled, false);
+  }
+  h.form(25, '', '', 'ก'.repeat(500));
+  h.handler(async (_action, payload) => state([item(3, { ...payload, version: 'saved' })], { savedRow: 3 }));
+  await h.submit();
+  assert.equal(h.calls.at(-1).payload.note.length, 500);
+  assert.equal(h.get('giftFeedback').textContent, 'บันทึกของแถมแล้ว');
+});
+
+test('notes render as escaped multiline text, never executable markup', async () => {
+  const note = '<script>alert("x")</script>\n<img src=x onerror="bad()"> & text';
+  const h = harness(state([item(3, { note })]));
+  await h.api.refresh();
+  const html = h.get('giftList').innerHTML;
+  assert.ok(html.includes('&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;\n&lt;img'));
+  assert.ok(html.includes('&amp; text'));
+  assert.ok(!html.includes(note));
+  assert.doesNotMatch(html, /<script>|<img src=x/);
+});
+
+test('old note-unaware backends remain readable but block writes until an explicit capability upgrade', async () => {
+  for (const capability of [undefined, false, 'true', 1]) {
+    const h = harness(state([item(3, { note: undefined })], { notesSupported: capability }));
+    await h.api.refresh();
+    assert.equal(h.get('giftCount').textContent, '1 ชิ้น');
+    assert.match(h.get('giftList').innerHTML, /data-gift-row="3"/);
+    assert.match(h.get('giftList').innerHTML, /อัปเดตระบบเพื่ออ่านโน้ต/);
+    assert.equal(h.get('giftSaveBtn').disabled, true);
+    assert.equal(h.get('giftNote').disabled, true);
+    assert.match(h.get('giftFeedback').textContent, /โน้ต \(AE\).*Apps Script.*Deploy/);
+    h.form(25, '', '', 'ต้องเก็บโน้ตนี้');
+    await h.submit();
+    await h.edit(3);
+    assert.equal(h.calls.length, 1);
+    assert.equal(h.get('giftFormTitle').textContent, 'เพิ่มของแถม');
+    h.handler(async () => state([item(3, { note: 'โน้ตที่อ่านได้หลังอัปเดต' })]));
+    await h.api.refresh();
+    assert.equal(h.get('giftSaveBtn').disabled, false);
+    assert.equal(h.get('giftNote').disabled, false);
+    await h.edit(3);
+    assert.equal(h.get('giftNote').value, 'โน้ตที่อ่านได้หลังอัปเดต');
+  }
+});
+
+test('a claimed note-capable state missing the note field is invalid and cannot erase existing notes', async () => {
+  const h = harness(state([item(3, { note: undefined })]));
+  await assert.rejects(h.api.refresh(), /ข้อมูลของแถมไม่ถูกต้อง/);
+  assert.equal(h.get('giftSaveBtn').disabled, true);
+  h.form(25, '', '', 'โน้ตใหม่');
+  await h.submit();
+  assert.equal(h.calls.length, 1);
+});
+
+test('a downgraded save response never claims note success or enables a blind retry', async () => {
+  const h = harness();
+  await h.api.refresh();
+  h.form(25, 'A', '', 'ต้องเก็บ');
+  h.handler(async (_action, payload) => state([item(3, { ...payload, note: undefined, version: 'saved' })], { savedRow: 3, notesSupported: undefined }));
+  await h.submit();
+  assert.equal(h.get('giftNote').value, 'ต้องเก็บ');
+  assert.equal(h.get('giftSaveBtn').disabled, true);
+  assert.match(h.get('giftFeedback').textContent, /โน้ต \(AE\).*Apps Script.*Deploy/);
+  assert.doesNotMatch(h.get('giftFeedback').textContent, /^บันทึกของแถมแล้ว/);
+  await h.submit();
+  assert.equal(h.calls.length, 2);
+  assert.equal(h.snapshotCalls.length, 0);
+});
+
+test('the saved note must match the submitted note before form reset or finance confirmation', async () => {
+  const h = harness();
+  await h.api.refresh();
+  h.form(25, 'A', '', 'โน้ตที่ตั้งใจบันทึก');
+  h.handler(async (_action, payload) => state([item(3, { ...payload, note: 'คนละข้อความ', version: 'saved' })], { savedRow: 3 }));
+  await h.submit();
+  assert.equal(h.get('giftNote').value, 'โน้ตที่ตั้งใจบันทึก');
+  assert.equal(h.get('giftNote').disabled, true);
+  assert.match(h.get('giftFeedback').textContent, /ยังยืนยันการบันทึกไม่ได้/);
+  assert.equal(h.financeCalls.length, 1);
+  assert.equal(h.snapshotCalls.length, 0);
 });
 
 test('version conflict retains form, blocks blind retry, and cancel requires a new read before adding', async () => {

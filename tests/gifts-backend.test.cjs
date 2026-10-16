@@ -119,8 +119,9 @@ test('empty gift state is read-only, scoped and locked without draft recovery', 
   assert.deepEqual(state.items, []);
   assert.equal(state.spreadsheetId, 'configured-sheet');
   assert.equal(state.sourceSheetName, 'Products');
+  assert.equal(state.notesSupported, true);
   assert.equal(state.nextRow, 3);
-  assert.deepEqual(JSON.parse(state.nextVersion), [['', '', ''], ['', '', '']]);
+  assert.deepEqual(JSON.parse(state.nextVersion), [['', '', '', ''], ['', '', '', '']]);
   assert.match(state.observedAt, /^\d{4}-\d\d-\d\dT/);
   assert.equal(s.recoveryCount, 0);
   assert.equal(s.lockCount, 1); assert.equal(s.releaseCount, 1); assert.equal(s.locked, false);
@@ -146,11 +147,11 @@ test('reads every occupied AB:AD row, including zero, partial records and formul
   assert.equal(s.mutations.length, 0);
 });
 
-test('saving writes exactly AB:AD and preserves all headers, totals, product data and later columns', () => {
+test('legacy saves write exactly AB:AD and preserve all headers, totals, product data and later columns', () => {
   const s = setup();
   for (let row = 1; row <= 4; row++) {
     for (let col = 1; col <= 34; col++) {
-      if (row < 3 || col < 28 || col > 30) s.products.set(row, col, col === 7 ? { formula: `=F${row}-E${row}`, value: 12 } : `preserve-${row}-${col}`);
+      if (row < 3 || col < 28 || col > 31) s.products.set(row, col, col === 7 ? { formula: `=F${row}-E${row}`, value: 12 } : `preserve-${row}-${col}`);
     }
   }
   const before = JSON.stringify(s.products.cells);
@@ -401,7 +402,7 @@ test('gift add100/edit150 use T2/V2 once, preserve formulas/history and leave Dr
   assert.deepEqual(s.products.getRange(2, 20, 1, 3).getFormulas(), formulasBefore);
   assert.equal(JSON.stringify(drafts.cells), draftBefore);
   assert.equal(s.mutations.filter(item => item.sheet === 'ProductDrafts').length, 0);
-  assert(s.mutations.every(item => item.sheet === 'RevenueHistory' || (item.sheet === 'Products' && item.column === 28 && item.width === 3)));
+  assert(s.mutations.every(item => item.sheet === 'RevenueHistory' || (item.sheet === 'Products' && item.column === 28 && [3, 4].includes(item.width))));
   assert.equal(s.recoveryCount, 0); assert.equal(s.locked, false);
 });
 
@@ -546,4 +547,142 @@ test('empty valid history warns on read but a successful first save clears the w
   const saved = s.api('saveGift', s.nextPayload({ cost: 0 }));
   assert.equal(saved.ok, true); assert.equal(saved.result.snapshotWarning, undefined);
   assert.equal(s.state().snapshotWarning, undefined);
+});
+
+test('notes round-trip through AE with whitespace trimming, linebreaks, max length, editing and explicit clearing', () => {
+  const s = setup();
+  s.products.set(1, 31, 'existing note header'); s.products.set(2, 31, 'existing summary');
+  s.products.set(3, 32, 'preserve AF');
+  const first = s.api('saveGift', s.nextPayload({ note: 'ก'.repeat(500) }));
+  assert.equal(first.ok, true, first.error); assert.equal(first.result.notesSupported, true);
+  assert.equal(first.result.items[0].note, 'ก'.repeat(500));
+  assert.equal(s.products.value(3, 31), 'ก'.repeat(500));
+  assert.equal(s.mutations[0].column, 28); assert.equal(s.mutations[0].width, 4);
+  const edited = s.api('saveGift', { ...first.result.items[0], note: '  แถมพร้อมแจกัน\nห่อแยกกัน  ' });
+  assert.equal(edited.ok, true, edited.error); assert.equal(edited.result.items[0].note, 'แถมพร้อมแจกัน\nห่อแยกกัน');
+  const cleared = s.api('saveGift', { ...edited.result.items[0], note: '' });
+  assert.equal(cleared.ok, true, cleared.error); assert.equal(cleared.result.items[0].note, '');
+  assert.equal(s.products.value(3, 31), '');
+  assert.equal(s.products.value(1, 31), 'existing note header');
+  assert.equal(s.products.value(2, 31), 'existing summary'); assert.equal(s.products.value(3, 32), 'preserve AF');
+});
+
+test('invalid note types or over500 characters are rejected before any write or capacity extension', () => {
+  for (const note of [null, 12, false, {}, [], 'a'.repeat(501), ' '.repeat(501)]) {
+    const s = setup({ rows: 2, columns: 26 });
+    const result = s.api('saveGift', s.nextPayload({ note }));
+    assert.equal(result.ok, false, `note ${JSON.stringify(note)}`); assert.match(result.error, /500/);
+    assert.deepEqual(s.mutations, []); assert.equal(s.products.maxColumns, 26); assert.equal(s.products.maxRows, 2);
+    assert.equal(s.locked, false);
+  }
+});
+
+test('formula-looking and numeric-looking notes are stored as literal text, not formulas or numbers', () => {
+  for (const note of ['=HYPERLINK("https://example.com")', '+1+1', '-10', '00123', "'quote", '12/10/2026']) {
+    const s = setup();
+    const result = s.api('saveGift', s.nextPayload({ note }));
+    assert.equal(result.ok, true, result.error);
+    assert.equal(s.products.value(3, 31), note); assert.equal(result.result.items[0].note, note);
+    assert.equal(s.products.getRange(3, 31).getFormulas()[0][0], '');
+  }
+});
+
+test('AE-only notes and empty-result formulas are occupied, returned and protected when allocating new gifts', () => {
+  const s = setup();
+  s.products.set(3, 31, 'existing note only');
+  s.products.set(4, 31, { formula: '=IF(TRUE,"","")', value: '' });
+  const state = s.state();
+  assert.deepEqual(state.items.map(item => item.row), [3, 4]);
+  assert.equal(state.items[0].note, 'existing note only'); assert.equal(state.items[0].cost, null);
+  assert.equal(state.items[1].readOnly, true); assert.equal(state.items[1].note, '');
+  assert.equal(state.nextRow, 5);
+  const blocked = s.api('saveGift', { ...state.items[1], cost: 10, customer: '', image: '', note: 'try overwrite' });
+  assert.equal(blocked.ok, false); assert.match(blocked.error, /สูตร/); assert.deepEqual(s.mutations, []);
+  const saved = s.api('saveGift', s.nextPayload({ note: 'new note' }));
+  assert.equal(saved.ok, true, saved.error); assert.equal(saved.result.savedRow, 5);
+  assert.equal(s.products.value(3, 31), 'existing note only'); assert.equal(s.products.raw(4, 31).formula, '=IF(TRUE,"","")');
+});
+
+test('legacy missing-note payload preserves AE byte-for-byte and writes only AB:AD', () => {
+  for (const stored of ['existing note', { literal: "'literal" }, 123, 'a'.repeat(600)]) {
+    const s = setup();
+    s.products.set(3, 28, 25); s.products.set(3, 29, 'old customer'); s.products.set(3, 31, stored);
+    const current = s.state().items[0];
+    const { note, ...legacyItem } = current;
+    const beforeAE = JSON.stringify(s.products.raw(3, 31));
+    const result = s.api('saveGift', { ...legacyItem, cost: 30, customer: 'new customer' });
+    assert.equal(result.ok, true, result.error); assert.equal(result.result.items[0].cost, 30);
+    assert.equal(JSON.stringify(s.products.raw(3, 31)), beforeAE);
+    assert.equal(s.mutations.length, 1); assert.equal(s.mutations[0].width, 3);
+  }
+});
+
+test('stale three-cell legacy versions reject changed writes safely but an identical retry remains a no-op', () => {
+  const s = setup();
+  const oldEmptyVersion = JSON.stringify([['', '', ''], ['', '', '']]);
+  assert.equal(s.api('saveGift', { ...s.nextPayload({ note: 'new' }), version: oldEmptyVersion }).ok, false);
+  assert.deepEqual(s.mutations, []);
+  s.products.set(3, 28, 25); s.products.set(3, 29, 'customer'); s.products.set(3, 30, 'https://example.com/gift.jpg');
+  s.products.set(3, 31, 'keep note');
+  const legacyVersion = JSON.stringify([[25, 'customer', 'https://example.com/gift.jpg'], ['', '', '']]);
+  const legacyPayload = { row: 3, version: legacyVersion, cost: 26, customer: 'customer', image: 'https://example.com/gift.jpg' };
+  const blocked = s.api('saveGift', legacyPayload);
+  assert.equal(blocked.ok, false); assert.match(blocked.error, /โหลดข้อมูลใหม่/); assert.deepEqual(s.mutations, []);
+  const noOp = s.api('saveGift', { ...legacyPayload, cost: 25 });
+  assert.equal(noOp.ok, true, noOp.error); assert.equal(noOp.result.items[0].note, 'keep note');
+  assert.deepEqual(s.mutations, []);
+});
+
+test('concurrent note changes are covered by the four-cell optimistic version', () => {
+  const s = setup();
+  const first = s.api('saveGift', s.nextPayload({ note: 'initial' }));
+  const original = first.result.items[0];
+  const second = s.api('saveGift', { ...original, note: 'changed elsewhere' });
+  assert.equal(second.ok, true, second.error); assert.notEqual(second.result.items[0].version, original.version);
+  const stale = s.api('saveGift', { ...original, note: 'my change' });
+  assert.equal(stale.ok, false); assert.match(stale.error, /โหลดข้อมูลใหม่/);
+  assert.equal(s.products.value(3, 31), 'changed elsewhere');
+  const { note, ...oldClientPayload } = original;
+  assert.equal(s.api('saveGift', { ...oldClientPayload, cost: 99 }).ok, false);
+  assert.equal(s.products.value(3, 28), original.cost);
+});
+
+test('lost-response retries retain the exact note and never create another gift or duplicate finance point', () => {
+  const s = setup({ finance: true, history: true });
+  const payload = s.nextPayload({ cost: 100, note: 'include this note' });
+  s.fail('after-write');
+  assert.equal(s.api('saveGift', payload).ok, false);
+  const retry = s.api('saveGift', payload);
+  assert.equal(retry.ok, true, retry.error); assert.equal(retry.result.items.length, 1);
+  assert.equal(retry.result.items[0].note, payload.note); assert.equal(retry.result.finance.expense, 200);
+  const history = s.sheets.find(sheet => sheet.name === 'RevenueHistory');
+  assert.equal(history.getLastRow(), 2);
+  assert.equal(s.api('saveGift', payload).ok, true); assert.equal(history.getLastRow(), 2);
+  assert.equal(s.mutations.filter(item => item.sheet === 'Products').length, 1);
+});
+
+test('note-only edits preserve finance totals and do not append a redundant chart snapshot', () => {
+  const s = setup({ finance: true, history: true });
+  const first = s.api('saveGift', s.nextPayload({ cost: 100, note: 'before' }));
+  const changed = s.api('saveGift', { ...first.result.items[0], note: 'after' });
+  assert.equal(changed.ok, true, changed.error);
+  assert.equal(changed.result.finance.expense, first.result.finance.expense);
+  assert.equal(changed.result.finance.profit, first.result.finance.profit);
+  assert.equal(changed.result.finance.revenue, first.result.finance.revenue);
+  assert.deepEqual(changed.result.snapshot, first.result.snapshot);
+  assert.equal(s.sheets.find(sheet => sheet.name === 'RevenueHistory').getLastRow(), 2);
+  assert.equal(s.products.value(3, 31), 'after');
+});
+
+test('note-capable read pads absent AE without mutation; explicit note saves extend only required capacity', () => {
+  const s = setup({ rows: 2, columns: 30 });
+  const state = s.state();
+  assert.equal(state.notesSupported, true); assert.deepEqual(JSON.parse(state.nextVersion), [['', '', '', ''], ['', '', '', '']]);
+  assert.deepEqual(s.mutations, []); assert.equal(s.products.maxColumns, 30);
+  const result = s.api('saveGift', { row: state.nextRow, version: state.nextVersion, cost: 0, customer: '', image: '', note: '' });
+  assert.equal(result.ok, true, result.error); assert.equal(result.result.items[0].note, '');
+  assert.equal(s.products.maxRows, 3); assert.equal(s.products.maxColumns, 31);
+  assert.deepEqual(s.mutations.map(item => item.type), ['rows', 'columns', 'values']);
+  assert.equal(s.mutations[1].after, 30); assert.equal(s.mutations[1].count, 1);
+  assert.equal(s.mutations[2].width, 4);
 });

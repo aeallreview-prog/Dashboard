@@ -1,7 +1,8 @@
-/* Gifts are stored only in the selected sheet: AB cost, AC customer, AD image. */
+/* Gifts are stored only in the selected sheet: AB cost, AC customer, AD image, AE note. */
 (function () {
   'use strict';
   const PAGE_SIZE = 10;
+  const NOTE_UPGRADE_MESSAGE = 'ระบบของแถมยังไม่รองรับโน้ต (AE) กรุณาอัปเดต Apps Script และ Deploy เป็นเวอร์ชันใหม่ แล้วกดโหลดล่าสุดก่อนบันทึก';
   const byId = id => document.getElementById(id);
   let initialized = false;
   let items = [];
@@ -85,17 +86,18 @@
 
   function renderControls() {
     const busy = Boolean(saveRequest);
-    ['giftImage', 'giftCost', 'giftCustomer'].forEach(id => {
-      byId(id).disabled = busy || !available || Boolean(pendingAttempt);
+    const writable = available && lastState && lastState.notesSupported === true;
+    ['giftImage', 'giftCost', 'giftCustomer', 'giftNote'].forEach(id => {
+      byId(id).disabled = busy || !writable || Boolean(pendingAttempt);
     });
-    byId('giftSaveBtn').disabled = busy || !available || Boolean(pendingAttempt && pendingAttempt.blocked);
+    byId('giftSaveBtn').disabled = busy || !writable || Boolean(pendingAttempt && pendingAttempt.blocked);
     byId('giftSaveBtn').textContent = busy ? 'กำลังบันทึก…' : pendingAttempt ? 'ลองบันทึกรายการเดิมอีกครั้ง' : editing ? 'บันทึกการแก้ไข' : 'บันทึกของแถม';
     byId('giftCancelBtn').hidden = !editing && !pendingAttempt;
     byId('giftCancelBtn').disabled = busy;
     byId('giftRefreshBtn').disabled = busy || Boolean(refreshRequest);
     byId('giftList').querySelectorAll('[data-gift-edit]').forEach(button => {
       const item = items.find(entry => entry.row === Number(button.dataset.giftEdit));
-      button.disabled = busy || !available || Boolean(pendingAttempt) || !item || item.readOnly;
+      button.disabled = busy || !writable || Boolean(pendingAttempt) || !item || item.readOnly;
     });
     byId('giftPagination').querySelectorAll('[data-gift-page]').forEach(button => {
       const target = Number(button.dataset.giftPage);
@@ -133,11 +135,12 @@
     if (!items.length) {
       list.innerHTML = '<p class="empty">' + (available ? 'ยังไม่มีของแถม — เพิ่มต้นทุน รูป และชื่อลูกค้าได้จากช่องด้านบน' : 'กรุณาโหลดข้อมูลของแถมล่าสุดก่อนบันทึก') + '</p>';
     } else {
-      list.innerHTML = '<table class="draft-table gift-table" aria-label="รายการของแถม"><thead><tr><th scope="col">รูป</th><th scope="col" class="draft-cost-cell">ต้นทุน</th><th scope="col">ลูกค้าที่ได้รับ</th><th scope="col">จัดการ</th></tr></thead><tbody>' +
+      list.innerHTML = '<table class="draft-table gift-table" aria-label="รายการของแถม"><thead><tr><th scope="col">รูป</th><th scope="col" class="draft-cost-cell">ต้นทุน</th><th scope="col">ลูกค้าที่ได้รับ</th><th scope="col">โน้ต</th><th scope="col">จัดการ</th></tr></thead><tbody>' +
         items.slice(start, start + PAGE_SIZE).map(item => '<tr data-gift-row="' + item.row + '">' +
           '<td><div class="draft-table-image">' + imageMarkup(item.image) + '</div></td>' +
           '<td class="draft-cost-cell"><strong>' + (item.cost === null ? '—' : money(item.cost)) + '</strong>' + (item.cost === null ? '<div class="product-draft-note">ยังไม่มีต้นทุนที่คำนวณได้</div>' : '') + '</td>' +
           '<th scope="row" class="draft-table-label gift-customer-cell">' + (item.customer ? escapeHtml(item.customer) : '<span class="product-draft-note">ยังไม่ได้แถมให้ลูกค้า</span>') + '</th>' +
+          '<td class="gift-note-cell">' + (lastState && lastState.notesSupported === true ? (item.note ? escapeHtml(item.note) : '<span class="product-draft-note">—</span>') : '<span class="product-draft-note">อัปเดตระบบเพื่ออ่านโน้ต</span>') + '</td>' +
           '<td><div class="draft-table-actions">' + (item.readOnly ? '<span class="product-draft-note">มีสูตรในชีท · อ่านอย่างเดียว</span>' : '<button type="button" class="ghost" data-gift-edit="' + item.row + '">แก้ไข</button>') + '</div></td></tr>').join('') + '</tbody></table>';
       attachImageErrors(list);
     }
@@ -148,7 +151,7 @@
   function resetForm() {
     editing = null;
     pendingAttempt = null;
-    ['giftCost', 'giftCustomer', 'giftImage'].forEach(id => { byId(id).value = ''; });
+    ['giftCost', 'giftCustomer', 'giftImage', 'giftNote'].forEach(id => { byId(id).value = ''; });
     byId('giftFormTitle').textContent = 'เพิ่มของแถม';
     previewImage();
     renderControls();
@@ -190,6 +193,7 @@
       if (!item || !Number.isSafeInteger(item.row) || item.row < 3 || seen.has(item.row) ||
           (item.cost !== null && (!Number.isFinite(item.cost) || item.cost < 0 || item.cost > 1000000000 || !Number.isSafeInteger(Math.round(item.cost * 100)))) ||
           typeof item.customer !== 'string' || typeof item.image !== 'string' ||
+          (state.notesSupported === true ? typeof item.note !== 'string' : item.note !== undefined && typeof item.note !== 'string') ||
           typeof item.version !== 'string' || !item.version || typeof item.readOnly !== 'boolean') {
         throw new Error('ข้อมูลของแถมไม่ถูกต้อง กรุณาตรวจสอบในชีทแล้วโหลดล่าสุด');
       }
@@ -268,6 +272,7 @@
         if (request.revision !== stateRevision) return lastState;
         const state = applyState(result);
         const warnings = syncFinance(state, false);
+        if (state.notesSupported !== true) warnings.unshift(NOTE_UPGRADE_MESSAGE);
         const message = pendingAttempt ? 'โหลดล่าสุดแล้ว กรุณาตรวจสอบรายการเดิมก่อนเพิ่มใหม่ ข้อมูลที่รอยืนยันยังคงอยู่ในฟอร์ม' : 'โหลดข้อมูลของแถมล่าสุดแล้ว';
         feedback(message + (warnings.length ? ' แต่ ' + warnings.join(' · ') : ''), Boolean(pendingAttempt) || Boolean(warnings.length));
         return state;
@@ -294,18 +299,21 @@
     const cost = Number(rawCost);
     const customer = byId('giftCustomer').value.trim();
     const image = byId('giftImage').value.trim();
+    const rawNote = byId('giftNote').value;
     if (!/^\d+(?:\.\d{1,2})?$/.test(rawCost) || !Number.isFinite(cost) || cost > 1000000000 || !Number.isSafeInteger(Math.round(cost * 100))) {
       throw new Error('กรุณากรอกต้นทุนตั้งแต่ 0 ถึง 1,000,000,000 บาท ทศนิยมไม่เกิน 2 ตำแหน่ง');
     }
     if (customer.length > 200) throw new Error('ชื่อลูกค้าต้องไม่เกิน 200 ตัวอักษร');
+    if (rawNote.length > 500) throw new Error('โน้ตต้องไม่เกิน 500 ตัวอักษร');
     if (image.length > 2000 || (image && !validImageUrl(image))) throw new Error('กรุณาใส่ลิงก์รูป http:// หรือ https:// ที่ไม่มีชื่อผู้ใช้หรือรหัสผ่าน และยาวไม่เกิน 2,000 ตัวอักษร');
-    return { cost, customer, image };
+    return { cost, customer, image, note: rawNote.trim() };
   }
 
   async function save(event) {
     event.preventDefault();
     ensureConfig();
     if (saveRequest || !available || !lastState || (pendingAttempt && pendingAttempt.blocked)) return;
+    if (lastState.notesSupported !== true) { feedback(NOTE_UPGRADE_MESSAGE, true); return; }
     if (!pendingAttempt) {
       try {
         const fields = readForm();
@@ -329,8 +337,14 @@
       const result = await callWriteApi('saveGift', { ...attempt.payload });
       if (!isCurrent(request)) return;
       validateState(result, attempt.payload.sourceSheetName);
+      if (result.notesSupported !== true) {
+        available = false;
+        attempt.blocked = true;
+        render();
+        throw new Error(NOTE_UPGRADE_MESSAGE);
+      }
       const saved = result.items.find(item => item.row === attempt.payload.row);
-      if (result.savedRow !== attempt.payload.row || !saved || saved.cost !== attempt.payload.cost || saved.customer !== attempt.payload.customer || saved.image !== attempt.payload.image) {
+      if (result.savedRow !== attempt.payload.row || !saved || saved.cost !== attempt.payload.cost || saved.customer !== attempt.payload.customer || saved.image !== attempt.payload.image || saved.note !== attempt.payload.note) {
         throw new Error('ยังยืนยันข้อมูลที่บันทึกไม่ได้ กรุณาโหลดล่าสุดและตรวจสอบรายการเดิม');
       }
       applyState(result);
@@ -341,7 +355,7 @@
       feedback('บันทึกของแถมแล้ว' + (warnings.length ? ' แต่ ' + warnings.join(' · ') : ''), Boolean(warnings.length));
     } catch (error) {
       if (!isCurrent(request)) return;
-      attempt.blocked = isConflict(error);
+      attempt.blocked = attempt.blocked || isConflict(error);
       if (/unknown action|ไม่รู้จัก action/i.test(error && error.message ? error.message : String(error))) {
         available = false;
         render();
@@ -359,6 +373,7 @@
   function edit(row) {
     ensureConfig();
     if (saveRequest || pendingAttempt || !available) return;
+    if (!lastState || lastState.notesSupported !== true) { feedback(NOTE_UPGRADE_MESSAGE, true); return; }
     const item = items.find(entry => entry.row === row);
     if (!item || item.readOnly) return;
     editing = { row: item.row, version: item.version };
@@ -366,6 +381,7 @@
     byId('giftCost').value = item.cost === null ? '' : String(item.cost);
     byId('giftCustomer').value = item.customer;
     byId('giftImage').value = item.image;
+    byId('giftNote').value = item.note;
     previewImage();
     renderControls();
     feedback('', false);

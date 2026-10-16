@@ -50,7 +50,7 @@ for (const { name, source } of entries) {
     const ids = [...source.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
     for (const id of [
       'view-gifts', 'giftRefreshBtn', 'giftCount', 'giftTotal', 'giftForm',
-      'giftFormTitle', 'giftImage', 'giftCost', 'giftCustomer', 'giftImagePreview',
+      'giftFormTitle', 'giftImage', 'giftCost', 'giftCustomer', 'giftNote', 'giftImagePreview',
       'giftSaveBtn', 'giftCancelBtn', 'giftFeedback', 'giftList', 'giftPagination',
     ]) assert.equal(ids.filter(value => value === id).length, 1, `${id} must occur once`);
     assert.equal([...source.matchAll(/data-view="gifts"/g)].length, 1);
@@ -65,6 +65,8 @@ for (const { name, source } of entries) {
     assert.match(view, /<input id="giftCost"[^>]*min="0"[^>]*max="1000000000"[^>]*step="0\.01"/);
     assert.match(view, /<label for="giftCustomer">[^<]*\(AC\)/);
     assert.match(view, /<label for="giftImage">[^<]*\(AD\)/);
+    assert.match(view, /<label for="giftNote">[^<]*\(AE\)/);
+    assert.match(view, /<textarea id="giftNote"[^>]*maxlength="500"[^>]*\bdisabled(?:>|\s)/);
     assert.match(view, /id="giftFeedback"[^>]*role="status"[^>]*aria-live="polite"/);
     assert.match(view, /id="giftPagination"[^>]*aria-label="[^"]+"[^>]*hidden/);
   });
@@ -81,10 +83,12 @@ for (const { name, source } of entries) {
 }
 
 test('gift form uses white editable inputs, mobile stacking and uncropped shared images', () => {
-  assert.match(giftStyles(css), /#giftForm input\s*\{\s*background:\s*#fff;/);
+  assert.match(giftStyles(css), /#giftForm input\s*\{[^}]*background:\s*#fff;/);
+  assert.match(giftStyles(css), /#giftForm textarea\s*\{[^}]*background:\s*#fff;/);
   assert.match(giftStyles(css), /@media\s*\(max-width:\s*600px\)[\s\S]*#giftForm\s*\{\s*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
   assert.match(css, /\.draft-table-image img\s*\{[^}]*object-fit:\s*contain;/);
   assert.match(css, /\.draft-table-wrap\s*\{[^}]*overflow-x:\s*auto;/);
+  assert.match(giftStyles(css), /white-space:\s*pre-wrap;/);
 });
 
 test('gift integration hooks match the standalone application', () => {
@@ -353,4 +357,159 @@ test('loadData still reports current Draft failures and failures without revisio
     await h.run();
     assert.deepEqual(h.errors, ['Draft refresh unavailable']);
   }
+});
+
+// Reuse the unit suites' in-memory Sheet/DOM adapters without registering their
+// tests. The adapters still execute the real Apps Script API and gifts.js, so
+// these cases verify the actual JSON contract across both production modules.
+function fixtureConstructor(filename, name) {
+  const source = fs.readFileSync(path.join(__dirname, filename), 'utf8');
+  const firstTest = source.indexOf('\ntest(');
+  assert.ok(firstTest > 0, `Fixture constructor exists before tests in ${filename}`);
+  return new Function('require', '__dirname', source.slice(0, firstTest) + `\nreturn ${name};`)(require, __dirname);
+}
+
+function integratedGifts(existingBackend) {
+  const backend = existingBackend || fixtureConstructor('gifts-backend.test.cjs', 'setup')({ finance: true, history: true });
+  const ui = fixtureConstructor('gifts-frontend.test.cjs', 'harness')(backend.state());
+  Object.assign(ui.config, { sheetId: 'configured-sheet', sheetName: 'Products' });
+  const route = async (action, payload) => {
+    const response = backend.api(action, JSON.parse(JSON.stringify(payload)));
+    if (!response.ok) throw new Error(response.error);
+    return response.result;
+  };
+  ui.handler(route);
+  return { backend, ui, route };
+}
+
+test('AE note travels through the real UI/API on add, reload, edit and explicit clear', async () => {
+  const { backend, ui } = integratedGifts();
+  await ui.api.refresh();
+  assert.equal(backend.state().notesSupported, true);
+  const note = 'ห่อของขวัญ\nแนบการ์ดขอบคุณ';
+  ui.form(25, 'คุณเอ', 'https://example.test/gift.jpg');
+  ui.get('giftNote').value = note;
+  await ui.submit();
+  assert.equal(backend.state().items.length, 1);
+  assert.equal(backend.state().items[0].note, note);
+  assert.equal(backend.products.value(3, 31), note);
+  assert.equal(ui.get('giftNote').value, '');
+  assert.match(ui.get('giftList').innerHTML, /ห่อของขวัญ/);
+  assert.match(ui.get('giftList').innerHTML, /แนบการ์ดขอบคุณ/);
+
+  const reloaded = integratedGifts(backend).ui;
+  await reloaded.api.refresh();
+  await reloaded.edit(3);
+  assert.equal(reloaded.get('giftNote').value, note);
+  reloaded.get('giftNote').value = 'เปลี่ยนเป็นห่อสีฟ้า\nส่งพร้อมสินค้าหลัก';
+  await reloaded.submit();
+  assert.equal(backend.state().items[0].note, 'เปลี่ยนเป็นห่อสีฟ้า\nส่งพร้อมสินค้าหลัก');
+  await reloaded.edit(3);
+  reloaded.get('giftNote').value = '';
+  await reloaded.submit();
+  assert.equal(backend.products.value(3, 31), '');
+  assert.equal(backend.state().items.length, 1);
+});
+
+test('multiline notes are escaped in the UI and formula-looking notes stay literal in AE', async () => {
+  const { backend, ui } = integratedGifts();
+  await ui.api.refresh();
+  const note = '=SUM(A1:A9)\n<script>alert("gift")</script> & thank you';
+  ui.form(10);
+  ui.get('giftNote').value = note;
+  await ui.submit();
+  assert.equal(backend.products.value(3, 31), note);
+  assert.equal(backend.products.getRange(3, 31).getFormulas()[0][0], '');
+  assert.doesNotMatch(ui.get('giftList').innerHTML, /<script>/);
+  assert.match(ui.get('giftList').innerHTML, /&lt;script&gt;/);
+  assert.match(ui.get('giftList').innerHTML, /&amp; thank you/);
+  await ui.edit(3);
+  assert.equal(ui.get('giftNote').value, note);
+});
+
+test('note-only edits do not change financial totals or append duplicate graph points', async () => {
+  const { backend, ui } = integratedGifts();
+  await ui.api.refresh();
+  ui.form(100);
+  ui.get('giftNote').value = 'ก่อนแก้ไข';
+  await ui.submit();
+  const first = backend.state();
+  const history = backend.sheets.find(sheet => sheet.name === 'RevenueHistory');
+  const rows = history.getLastRow();
+  const writes = backend.mutations.filter(item => item.sheet === 'RevenueHistory').length;
+  await ui.edit(3);
+  ui.get('giftNote').value = 'แก้เฉพาะโน้ต';
+  await ui.submit();
+  const second = backend.state();
+  for (const key of ['revenue', 'expense', 'profit', 'draftCost']) assert.equal(second.finance[key], first.finance[key]);
+  assert.equal(second.items[0].note, 'แก้เฉพาะโน้ต');
+  assert.equal(history.getLastRow(), rows);
+  assert.equal(backend.mutations.filter(item => item.sheet === 'RevenueHistory').length, writes);
+  assert(backend.mutations.filter(item => item.sheet === 'Products').every(item => item.column === 28 && item.width === 4));
+});
+
+test('a legacy save omitting note preserves AE while the new UI explicitly clears it', async () => {
+  const { backend, ui } = integratedGifts();
+  await ui.api.refresh();
+  ui.form(25, 'ลูกค้าเดิม');
+  ui.get('giftNote').value = 'ต้องเก็บโน้ตเดิม';
+  await ui.submit();
+  const current = backend.state().items[0];
+  const response = backend.api('saveGift', {
+    row: current.row, version: current.version, cost: current.cost,
+    image: current.image, customer: 'ลูกค้าที่แก้ด้วยเว็บรุ่นเก่า',
+  });
+  assert.equal(response.ok, true, response.error);
+  assert.equal(backend.products.value(3, 31), 'ต้องเก็บโน้ตเดิม');
+  const write = backend.mutations.filter(item => item.sheet === 'Products').at(-1);
+  assert.equal(write.column, 28);
+  assert.equal(write.width, 3, 'legacy save does not write AE');
+  await ui.api.refresh();
+  await ui.edit(3);
+  ui.get('giftNote').value = '';
+  await ui.submit();
+  assert.equal(backend.products.value(3, 31), '');
+});
+
+test('lost save response retries the exact note and same row without duplicate finance history', async () => {
+  const { backend, ui, route } = integratedGifts();
+  await ui.api.refresh();
+  let loseResponse = true;
+  ui.handler(async (action, payload) => {
+    const result = await route(action, payload);
+    if (action === 'saveGift' && loseResponse) {
+      loseResponse = false;
+      throw new Error('Network dropped after confirmed server write');
+    }
+    return result;
+  });
+  ui.form(60);
+  ui.get('giftNote').value = 'บันทึกครั้งเดียว\nไม่เพิ่มซ้ำ';
+  await ui.submit();
+  assert.equal(ui.get('giftNote').disabled, true);
+  await ui.submit();
+  const attempts = ui.calls.filter(call => call.action === 'saveGift');
+  assert.equal(attempts.length, 2);
+  assert.deepEqual(attempts[1].payload, attempts[0].payload);
+  assert.equal(attempts[0].payload.note, 'บันทึกครั้งเดียว\nไม่เพิ่มซ้ำ');
+  assert.equal(backend.state().items.length, 1);
+  assert.equal(backend.sheets.find(sheet => sheet.name === 'RevenueHistory').getLastRow(), 2);
+});
+
+test('old backend without notesSupported cannot silently accept or discard notes from the new UI', async () => {
+  const { backend, ui, route } = integratedGifts();
+  ui.handler(async (action, payload) => {
+    const result = await route(action, payload);
+    delete result.notesSupported;
+    result.items.forEach(item => { delete item.note; });
+    return result;
+  });
+  await ui.api.refresh().catch(() => {});
+  assert.equal(ui.get('giftSaveBtn').disabled, true);
+  ui.form(30);
+  ui.get('giftNote').value = 'ห้ามหายเงียบ';
+  await ui.submit();
+  assert.equal(ui.calls.filter(call => call.action === 'saveGift').length, 0);
+  assert.equal(backend.state().items.length, 0);
+  assert.match(ui.get('giftFeedback').textContent, /Apps Script|Deploy|อัปเดต/);
 });
