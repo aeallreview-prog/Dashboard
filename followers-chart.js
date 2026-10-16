@@ -77,15 +77,14 @@ function followerWeekMissing(rows, time = Date.now()) {
   const saveStatus = document.getElementById('followerSaveStatus');
   const reminder = document.getElementById('followerReminder');
   const formatter = new Intl.NumberFormat('th-TH', { maximumFractionDigits: 0 });
+  const chartFilter = window.SNTChartFilter;
+  let filterState = chartFilter ? chartFilter.getState() : { range: 'week', customRange: null };
   let rows = [];
-  let range = 'week';
-  let customRange = null;
   let loading = false;
   let saving = false;
   let historyReady = false;
   let seedRows = [];
   let manualRows = [];
-  const dayNumber = date => Date.parse(date + 'T00:00:00+07:00');
   // Use the same rendered SVG width as revenue/profit so labels and strokes scale equally.
   const referenceChart = document.getElementById('trendSvgHolder');
   const matchChartSize = () => {
@@ -125,7 +124,7 @@ function followerWeekMissing(rows, time = Date.now()) {
     }
     const latest = rows[rows.length - 1];
     document.getElementById('followerCount').textContent = formatter.format(latest.count);
-    const points = buildFollowerPoints(rows, range, customRange);
+    const points = buildFollowerPoints(rows, filterState.range, filterState.customRange);
     const difference = points.length > 1 ? points[points.length - 1].value - points[0].value : null;
     document.getElementById('followerChange').textContent = difference === null
       ? ''
@@ -219,9 +218,6 @@ function followerWeekMissing(rows, time = Date.now()) {
       }
       manualRows = mergeFollowerHistory([], data.observations);
       rows = mergeFollowerHistory(seedRows, manualRows);
-      range = 'day';
-      clearDates();
-      updateButtons();
       render();
       input.value = '';
       showSaveStatus('บันทึก ' + formatter.format(count) + ' คน ลง Google Sheet แล้ว');
@@ -232,38 +228,10 @@ function followerWeekMissing(rows, time = Date.now()) {
       updateControls();
     }
   });
-  function updateButtons() {
-    document.querySelectorAll('#followerRange button').forEach(item => {
-      item.classList.toggle('active', item.dataset.range === range);
-      item.setAttribute('aria-pressed', String(item.dataset.range === range));
-    });
-  }
-  function clearDates() {
-    customRange = null;
-    document.getElementById('followerFromDate').value = '';
-    document.getElementById('followerToDate').value = '';
-  }
-  document.getElementById('followerRange').addEventListener('click', event => {
-    const button = event.target.closest('button[data-range]');
-    if (!button) return;
-    range = button.dataset.range;
-    updateButtons();
-    render();
-  });
-  document.getElementById('followerCustomBtn').addEventListener('click', () => {
-    const from = dayNumber(document.getElementById('followerFromDate').value);
-    const to = Date.parse(document.getElementById('followerToDate').value + 'T23:59:59.999+07:00');
-    if (!Number.isFinite(from) || !Number.isFinite(to) || from > to) {
-      note.textContent = 'กรุณาเลือกวันที่เริ่มต้นและสิ้นสุดให้ถูกต้อง';
-      return;
-    }
-    customRange = { from, to };
-    render();
-  });
-  document.getElementById('followerResetBtn').addEventListener('click', () => {
-    range = 'week';
-    clearDates();
-    updateButtons();
+  // The dashboard owns one filter for every line chart. Subscribe after the
+  // controls and renderer are ready, and retain it across loads and saves.
+  if (chartFilter) chartFilter.subscribe(state => {
+    filterState = state;
     render();
   });
   refresh.addEventListener('click', loadHistory);

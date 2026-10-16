@@ -1148,7 +1148,8 @@ function parseGvizDate(cell) {
   if (!cell) return null;
   if (typeof cell.v === 'string' && cell.v.startsWith('Date(')) {
     const parts = cell.v.replace('Date(', '').replace(')', '').split(',').map(Number);
-    return new Date(parts[0], parts[1], parts[2], parts[3] || 0, parts[4] || 0, parts[5] || 0);
+    // Sheet calendar components are in Bangkok, not the viewer's device timezone.
+    return new Date(Date.UTC(parts[0], parts[1], parts[2], parts[3] || 0, parts[4] || 0, parts[5] || 0) - 7 * 3600000);
   }
   if (cell.f) {
     const d = new Date(cell.f);
@@ -1239,7 +1240,7 @@ const RANGE_CONFIGS = {
 function aggregateHistory(series, range) {
   const c = RANGE_CONFIGS[range] || RANGE_CONFIGS.week;
   return lastPerGroup(series, c.key).slice(-CHART_POINTS).map(p => ({
-    label: c.isTime ? p.date.toLocaleTimeString('th-TH', c.fmt) : p.date.toLocaleDateString('th-TH', c.fmt),
+    label: p.date.toLocaleString('th-TH', { ...c.fmt, timeZone: 'Asia/Bangkok' }),
     value: p.value,
   }));
 }
@@ -1249,7 +1250,7 @@ const CUSTOM_RANGE_MAX_POINTS = 40; // cap so long custom ranges stay readable
 function pointsForCustomRange(series, from, to, range) {
   const filtered = series.filter(p => p.date >= from && p.date <= to);
   const c = RANGE_CONFIGS[range] || RANGE_CONFIGS.week;
-  const label = d => c.isTime ? d.toLocaleTimeString('th-TH', c.fmt) : d.toLocaleDateString('th-TH', c.fmt);
+  const label = d => d.toLocaleString('th-TH', { ...c.fmt, timeZone: 'Asia/Bangkok' });
 
   // Group by the selected day/week/month/year interval within the date range.
   const grouped = lastPerGroup(filtered, c.key);
@@ -1404,42 +1405,68 @@ function renderExpenseChart() {
   renderChart('expense', 'expenseSvgHolder', 'expenseTooltip', '#dc2626', 'รายจ่าย');
 }
 
+// One source of truth for every line chart, including followers loaded later.
+const chartFilterListeners = new Set();
+function getChartFilterState() {
+  return {
+    range: trendRange,
+    customRange: customRange ? { from: customRange.from.getTime(), to: customRange.to.getTime() } : null,
+  };
+}
+function subscribeChartFilter(listener) {
+  if (typeof listener !== 'function') throw new TypeError('Chart filter listener must be a function');
+  chartFilterListeners.add(listener);
+  listener(getChartFilterState());
+  return () => chartFilterListeners.delete(listener);
+}
+if (typeof window !== 'undefined') {
+  window.SNTChartFilter = Object.freeze({ getState: getChartFilterState, subscribe: subscribeChartFilter });
+}
+function renderFilteredCharts() {
+  document.querySelectorAll('#trendToggle .trend-btn').forEach(button => {
+    const selected = !customRange && button.dataset.range === trendRange;
+    button.classList.toggle('active', selected);
+    button.setAttribute('aria-pressed', String(selected));
+  });
+  renderTrendChart();
+  renderProfitChart();
+  renderExpenseChart();
+  chartFilterListeners.forEach(listener => listener(getChartFilterState()));
+}
+
 document.getElementById('trendToggle').addEventListener('click', (e) => {
   const btn = e.target.closest('.trend-btn');
-  if (!btn) return;
+  if (!btn || !['day', 'week', 'month', 'year'].includes(btn.dataset.range)) return;
   customRange = null;
-  document.querySelectorAll('#trendToggle .trend-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
+  if (trendDatePicker) trendDatePicker.clear();
   trendRange = btn.dataset.range;
-  renderTrendChart();
-  renderProfitChart();
-  renderExpenseChart();
+  renderFilteredCharts();
 });
 
-document.getElementById('trendCustomBtn').addEventListener('click', () => {
-  const fromVal = document.getElementById('trendFromDate').value;
-  const toVal = document.getElementById('trendToDate').value;
-  if (!fromVal || !toVal) return;
-  const from = new Date(fromVal + 'T00:00:00');
-  const to = new Date(toVal + 'T23:59:59');
-  if (from > to) return;
+function applyTrendDateRange({ from: fromVal, to: toVal }) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fromVal) || !/^\d{4}-\d{2}-\d{2}$/.test(toVal)) return;
+  // All charts share the exact same Bangkok calendar-day boundaries.
+  const from = new Date(fromVal + 'T00:00:00+07:00');
+  const to = new Date(toVal + 'T23:59:59.999+07:00');
+  if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime()) || from > to) return;
+  if (dayKey(from) !== fromVal || dayKey(to) !== toVal) return;
   customRange = { from, to };
-  document.querySelectorAll('#trendToggle .trend-btn').forEach(b => b.classList.remove('active'));
-  renderTrendChart();
-  renderProfitChart();
-  renderExpenseChart();
-});
+  renderFilteredCharts();
+}
+
+const trendDatePicker = typeof window !== 'undefined' && window.SNTDateRangePicker
+  ? window.SNTDateRangePicker.create({
+      root: document.getElementById('trendDatePicker'),
+      label: 'เลือกช่วงวันที่ของกราฟเส้นทั้งหมด',
+      onApply: applyTrendDateRange,
+    })
+  : null;
 
 document.getElementById('trendResetBtn').addEventListener('click', () => {
   customRange = null;
-  document.getElementById('trendFromDate').value = '';
-  document.getElementById('trendToDate').value = '';
-  document.querySelectorAll('#trendToggle .trend-btn').forEach(b => b.classList.remove('active'));
-  document.querySelector('#trendToggle .trend-btn[data-range="week"]').classList.add('active');
+  if (trendDatePicker) trendDatePicker.clear();
   trendRange = 'week';
-  renderTrendChart();
-  renderProfitChart();
-  renderExpenseChart();
+  renderFilteredCharts();
 });
 
 // ---------- message templates ----------

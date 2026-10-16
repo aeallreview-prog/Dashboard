@@ -218,20 +218,93 @@ button:disabled { opacity: .55; cursor: wait; }
 
 .trend-subhead { padding: 20px 24px 0; }
 .trend-subhead h3 { margin: 0; font: 700 25px 'DM Sans', sans-serif; color: var(--ink); letter-spacing: -.05em; white-space: nowrap; }
+.shared-chart-filter-head { align-items: center; padding-bottom: 12px; }
+.shared-chart-filter-head h2 { font-size: 16px; letter-spacing: -.02em; white-space: normal; }
+.shared-chart-filter-head p { margin: 5px 0 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
+.trend-first-title { padding-top: 6px; }
 
 .trend-toggle { display: flex; gap: 3px; background: var(--paper); border-radius: 12px; padding: 3px; flex: none; flex-wrap: wrap; }
 .trend-btn { background: transparent; color: var(--muted); padding: 6px 9px; border-radius: 9px; font: 600 10px 'DM Sans', sans-serif; white-space: nowrap; }
 .trend-btn:hover { background: transparent; color: var(--ink); }
 .trend-btn.active { background: var(--card); color: var(--blue); box-shadow: 0 1px 3px rgba(0,0,0,.1); }
 .trend-custom-range { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 0 24px 14px; }
-.trend-custom-range label { font-size: 11px; color: var(--muted); font-weight: 600; }
-.trend-custom-range input[type="date"] {
-  padding: 7px 10px; border-radius: 9px; border: 1px solid var(--line);
-  font: 500 12px 'DM Sans', sans-serif; color: var(--ink); background: var(--paper);
-}
+.trend-custom-range label, .trend-range-label { font-size: 11px; color: var(--muted); font-weight: 600; }
 .trend-custom-range button { padding: 7px 14px; font-size: 11px; }
 .trend-custom-range .trend-reset { background: var(--paper); color: var(--muted); }
 .trend-custom-range .trend-reset:hover { background: var(--line); color: var(--ink); }
+
+/* Both chart filters share one range calendar. The popup lives outside panels
+   so rounded, overflow-hidden chart cards cannot clip its controls. */
+.date-range-picker { position: relative; min-width: 0; max-width: 100%; }
+.date-range-picker .date-range-trigger {
+  display: inline-flex; align-items: center; justify-content: space-between; gap: 18px;
+  min-height: 44px; width: 262px; max-width: 100%; padding: 10px 13px;
+  border: 1px solid var(--line); border-radius: 12px; background: #fff; color: var(--ink);
+  font: 500 12px/1.5 'DM Sans', sans-serif; text-align: left; transition: border-color .15s, box-shadow .15s;
+}
+.date-range-picker .date-range-trigger:hover { border-color: #a8c6e0; background: #fff; }
+.date-range-picker .date-range-trigger[aria-expanded="true"] { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(26,99,168,.08); }
+.date-range-picker .date-range-trigger.is-placeholder { color: var(--muted); }
+.date-range-value { min-width: 0; overflow-wrap: anywhere; }
+.date-range-icon { display: inline-flex; flex: none; width: 18px; height: 18px; color: var(--muted); }
+.date-range-icon svg { width: 100%; height: 100%; }
+.date-range-popover {
+  position: fixed; z-index: 110; width: 320px; max-width: calc(100vw - 24px);
+  max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px); overflow-y: auto; overscroll-behavior: contain;
+  padding: 16px 12px 12px; border: 1px solid var(--line); border-radius: 22px;
+  color: var(--ink); background: #fff; box-shadow: 0 18px 50px rgba(17,38,58,.16), 0 3px 12px rgba(17,38,58,.05);
+  font-family: 'DM Sans', sans-serif;
+}
+.date-range-popover[hidden] { display: none; }
+.date-range-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 4px 12px; }
+.date-range-title { margin: 0; font: 600 15px/1.5 'DM Sans', sans-serif; color: var(--ink); }
+.date-range-nav { display: inline-flex; flex: none; border: 1px solid var(--line); border-radius: 12px; }
+.date-range-popover .date-range-nav button {
+  display: inline-flex; align-items: center; justify-content: center; width: 40px; min-height: 40px; padding: 0;
+  border-radius: 11px; background: transparent; color: var(--ink); font-size: 20px; line-height: 1;
+}
+.date-range-popover .date-range-nav button:hover { background: #edf5fc; color: var(--blue); }
+.date-range-popover .date-range-nav button:disabled { background: transparent; color: var(--muted); cursor: default; }
+.date-range-nav svg { width: 16px; height: 16px; }
+.date-range-weekdays, .date-range-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.date-range-weekdays { padding-bottom: 5px; }
+.date-range-weekdays span { display: flex; justify-content: center; align-items: center; min-height: 28px; color: var(--muted); font-size: 11px; font-weight: 500; }
+.date-range-grid { row-gap: 3px; }
+.date-range-cell { position: relative; min-width: 0; min-height: 44px; }
+.date-range-cell.is-in-range::before, .date-range-cell.is-start::before, .date-range-cell.is-end::before {
+  content: ''; position: absolute; inset: 4px 0; background: #e5f0fa; pointer-events: none;
+}
+.date-range-cell.is-start::before { left: 50%; }
+.date-range-cell.is-end::before { right: 50%; }
+.date-range-cell.is-single::before, .date-range-cell.is-empty::before { display: none; }
+.date-range-popover .date-range-day {
+  position: relative; isolation: isolate; display: flex; align-items: center; justify-content: center;
+  width: 100%; height: 44px; min-height: 44px; padding: 0; border: 0; border-radius: 9px;
+  color: var(--ink); background: transparent; font: 500 14px/1 'DM Sans', sans-serif;
+}
+.date-range-popover .date-range-day::before, .date-range-popover .date-range-day::after {
+  content: ''; position: absolute; top: 50%; left: 50%; width: 36px; height: 36px; max-width: 100%;
+  transform: translate(-50%, -50%); border-radius: 50%; z-index: -1; pointer-events: none;
+}
+.date-range-popover .date-range-day:hover { background: transparent; color: var(--blue-deep); }
+.date-range-popover .date-range-day:hover::before { background: #d5e7f7; }
+.date-range-popover .date-range-day.is-today::after { border: 1px solid #90b7d8; }
+.date-range-popover .date-range-day.is-start, .date-range-popover .date-range-day.is-end { color: #fff; font-weight: 700; }
+.date-range-popover .date-range-day.is-start::before, .date-range-popover .date-range-day.is-end::before { background: var(--blue); }
+.date-range-popover .date-range-day.is-start:hover::before, .date-range-popover .date-range-day.is-end:hover::before { background: var(--blue-deep); }
+.date-range-popover .date-range-day.is-start::after, .date-range-popover .date-range-day.is-end::after { border: 0; }
+.date-range-popover .date-range-day:disabled { color: #a5adb6; background: transparent; cursor: default; }
+.date-range-popover .date-range-day:disabled::before { background: transparent; }
+.date-range-hint { margin: 10px 4px 12px; min-height: 18px; color: var(--muted); font-size: 11px; line-height: 1.6; }
+.date-range-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 12px 4px 0; border-top: 1px solid var(--line); }
+.date-range-popover .date-range-actions button { justify-content: center; min-height: 44px; padding: 10px 16px; border-radius: 12px; font-size: 12px; }
+.date-range-popover .date-range-cancel { background: var(--paper); color: var(--muted); }
+.date-range-popover .date-range-cancel:hover { background: var(--line); color: var(--ink); }
+.date-range-popover .date-range-apply { background: var(--blue); color: #fff; }
+.date-range-popover .date-range-apply:hover { background: var(--blue-deep); }
+.date-range-popover .date-range-apply:disabled { background: var(--blue); cursor: not-allowed; }
+.date-range-picker .date-range-trigger:focus-visible, .date-range-popover button:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+.date-range-popover .date-range-day:focus-visible { outline-offset: -2px; }
 .trend-chart-wrap { padding: 6px 24px 26px; min-height: 220px; display: flex; align-items: center; justify-content: center; position: relative; }
 .chart-svg-holder { width: 100%; }
 .chart-svg-holder svg { width: 100%; height: auto; overflow: visible; }
@@ -694,25 +767,24 @@ button:disabled { opacity: .55; cursor: wait; }
       </div>
 
       <div class="panel panel-trend">
-        <div class="panel-head">
+        <div class="panel-head shared-chart-filter-head" id="sharedChartFilter">
           <div>
-            <h2>แนวโน้มรายได้</h2>
+            <h2>ตัวกรองกราฟเส้นทั้งหมด</h2>
+            <p>รายได้ · กำไร · รายจ่าย · ผู้ติดตาม</p>
           </div>
-          <div class="trend-toggle" id="trendToggle">
-            <button class="trend-btn" data-range="day">วัน</button>
-            <button class="trend-btn active" data-range="week">สัปดาห์</button>
-            <button class="trend-btn" data-range="month">เดือน</button>
-            <button class="trend-btn" data-range="year">ปี</button>
+          <div class="trend-toggle" id="trendToggle" role="group" aria-label="ช่วงเวลาของกราฟเส้นทั้งหมด">
+            <button class="trend-btn" data-range="day" type="button" aria-pressed="false">วัน</button>
+            <button class="trend-btn active" data-range="week" type="button" aria-pressed="true">สัปดาห์</button>
+            <button class="trend-btn" data-range="month" type="button" aria-pressed="false">เดือน</button>
+            <button class="trend-btn" data-range="year" type="button" aria-pressed="false">ปี</button>
           </div>
         </div>
         <div class="trend-custom-range">
-          <label>ช่วงที่เลือก:</label>
-          <input type="date" id="trendFromDate">
-          <span style="color:var(--muted);font-size:11px;">ถึง</span>
-          <input type="date" id="trendToDate">
-          <button id="trendCustomBtn">ดูช่วงนี้</button>
-          <button class="trend-reset" id="trendResetBtn">รีเซ็ต</button>
+          <span class="trend-range-label">ช่วงที่เลือก:</span>
+          <div class="date-range-picker" id="trendDatePicker"></div>
+          <button class="trend-reset" id="trendResetBtn" type="button">รีเซ็ต</button>
         </div>
+        <div class="trend-subhead trend-first-title"><h3>แนวโน้มรายได้</h3></div>
         <div class="trend-chart-wrap" id="trendChartWrap">
           <div class="chart-svg-holder" id="trendSvgHolder"><p class="empty">กำลังโหลดข้อมูลแนวโน้ม...</p></div>
           <div class="chart-tooltip" id="trendTooltip"></div>
@@ -736,25 +808,11 @@ button:disabled { opacity: .55; cursor: wait; }
           <h2 id="followerHeading">แนวโน้มผู้ติดตาม Instagram</h2>
           <a href="https://www.instagram.com/seek.n.tique/" target="_blank" rel="noopener noreferrer">@seek.n.tique</a>
         </div>
-        <div class="trend-toggle" id="followerRange" aria-label="ช่วงเวลาผู้ติดตาม">
-          <button class="trend-btn" data-range="day" aria-pressed="false">วัน</button>
-          <button class="trend-btn active" data-range="week" aria-pressed="true">สัปดาห์</button>
-          <button class="trend-btn" data-range="month" aria-pressed="false">เดือน</button>
-          <button class="trend-btn" data-range="year" aria-pressed="false">ปี</button>
-        </div>
       </div>
       <div class="follower-summary">
         <div><strong id="followerCount">—</strong><span>ผู้ติดตาม</span></div>
         <p id="followerChange"></p>
         <button class="ghost" id="followerRefresh" type="button">โหลดข้อมูลล่าสุด</button>
-      </div>
-      <div class="trend-custom-range">
-        <label for="followerFromDate">ช่วงที่เลือก:</label>
-        <input type="date" id="followerFromDate">
-        <label for="followerToDate">ถึง</label>
-        <input type="date" id="followerToDate">
-        <button id="followerCustomBtn" type="button">ดูช่วงนี้</button>
-        <button class="trend-reset" id="followerResetBtn" type="button">รีเซ็ต</button>
       </div>
       <div class="trend-chart-wrap">
         <div class="chart-svg-holder" id="followerChart"></div>
@@ -1119,6 +1177,7 @@ button:disabled { opacity: .55; cursor: wait; }
   </div>
 </div>
 
+<script src="date-range-picker.js?v=20261016-date-range"></script>
 <script src="drafts.js?v=20261013-gift-finance"></script>
 <script src="gifts.js?v=20261013-gift-finance"></script>
 <script>
@@ -2269,7 +2328,8 @@ function parseGvizDate(cell) {
   if (!cell) return null;
   if (typeof cell.v === 'string' && cell.v.startsWith('Date(')) {
     const parts = cell.v.replace('Date(', '').replace(')', '').split(',').map(Number);
-    return new Date(parts[0], parts[1], parts[2], parts[3] || 0, parts[4] || 0, parts[5] || 0);
+    // Sheet calendar components are in Bangkok, not the viewer's device timezone.
+    return new Date(Date.UTC(parts[0], parts[1], parts[2], parts[3] || 0, parts[4] || 0, parts[5] || 0) - 7 * 3600000);
   }
   if (cell.f) {
     const d = new Date(cell.f);
@@ -2360,7 +2420,7 @@ const RANGE_CONFIGS = {
 function aggregateHistory(series, range) {
   const c = RANGE_CONFIGS[range] || RANGE_CONFIGS.week;
   return lastPerGroup(series, c.key).slice(-CHART_POINTS).map(p => ({
-    label: c.isTime ? p.date.toLocaleTimeString('th-TH', c.fmt) : p.date.toLocaleDateString('th-TH', c.fmt),
+    label: p.date.toLocaleString('th-TH', { ...c.fmt, timeZone: 'Asia/Bangkok' }),
     value: p.value,
   }));
 }
@@ -2370,7 +2430,7 @@ const CUSTOM_RANGE_MAX_POINTS = 40; // cap so long custom ranges stay readable
 function pointsForCustomRange(series, from, to, range) {
   const filtered = series.filter(p => p.date >= from && p.date <= to);
   const c = RANGE_CONFIGS[range] || RANGE_CONFIGS.week;
-  const label = d => c.isTime ? d.toLocaleTimeString('th-TH', c.fmt) : d.toLocaleDateString('th-TH', c.fmt);
+  const label = d => d.toLocaleString('th-TH', { ...c.fmt, timeZone: 'Asia/Bangkok' });
 
   // Group by the selected day/week/month/year interval within the date range.
   const grouped = lastPerGroup(filtered, c.key);
@@ -2525,42 +2585,68 @@ function renderExpenseChart() {
   renderChart('expense', 'expenseSvgHolder', 'expenseTooltip', '#dc2626', 'รายจ่าย');
 }
 
+// One source of truth for every line chart, including followers loaded later.
+const chartFilterListeners = new Set();
+function getChartFilterState() {
+  return {
+    range: trendRange,
+    customRange: customRange ? { from: customRange.from.getTime(), to: customRange.to.getTime() } : null,
+  };
+}
+function subscribeChartFilter(listener) {
+  if (typeof listener !== 'function') throw new TypeError('Chart filter listener must be a function');
+  chartFilterListeners.add(listener);
+  listener(getChartFilterState());
+  return () => chartFilterListeners.delete(listener);
+}
+if (typeof window !== 'undefined') {
+  window.SNTChartFilter = Object.freeze({ getState: getChartFilterState, subscribe: subscribeChartFilter });
+}
+function renderFilteredCharts() {
+  document.querySelectorAll('#trendToggle .trend-btn').forEach(button => {
+    const selected = !customRange && button.dataset.range === trendRange;
+    button.classList.toggle('active', selected);
+    button.setAttribute('aria-pressed', String(selected));
+  });
+  renderTrendChart();
+  renderProfitChart();
+  renderExpenseChart();
+  chartFilterListeners.forEach(listener => listener(getChartFilterState()));
+}
+
 document.getElementById('trendToggle').addEventListener('click', (e) => {
   const btn = e.target.closest('.trend-btn');
-  if (!btn) return;
+  if (!btn || !['day', 'week', 'month', 'year'].includes(btn.dataset.range)) return;
   customRange = null;
-  document.querySelectorAll('#trendToggle .trend-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
+  if (trendDatePicker) trendDatePicker.clear();
   trendRange = btn.dataset.range;
-  renderTrendChart();
-  renderProfitChart();
-  renderExpenseChart();
+  renderFilteredCharts();
 });
 
-document.getElementById('trendCustomBtn').addEventListener('click', () => {
-  const fromVal = document.getElementById('trendFromDate').value;
-  const toVal = document.getElementById('trendToDate').value;
-  if (!fromVal || !toVal) return;
-  const from = new Date(fromVal + 'T00:00:00');
-  const to = new Date(toVal + 'T23:59:59');
-  if (from > to) return;
+function applyTrendDateRange({ from: fromVal, to: toVal }) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fromVal) || !/^\d{4}-\d{2}-\d{2}$/.test(toVal)) return;
+  // All charts share the exact same Bangkok calendar-day boundaries.
+  const from = new Date(fromVal + 'T00:00:00+07:00');
+  const to = new Date(toVal + 'T23:59:59.999+07:00');
+  if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime()) || from > to) return;
+  if (dayKey(from) !== fromVal || dayKey(to) !== toVal) return;
   customRange = { from, to };
-  document.querySelectorAll('#trendToggle .trend-btn').forEach(b => b.classList.remove('active'));
-  renderTrendChart();
-  renderProfitChart();
-  renderExpenseChart();
-});
+  renderFilteredCharts();
+}
+
+const trendDatePicker = typeof window !== 'undefined' && window.SNTDateRangePicker
+  ? window.SNTDateRangePicker.create({
+      root: document.getElementById('trendDatePicker'),
+      label: 'เลือกช่วงวันที่ของกราฟเส้นทั้งหมด',
+      onApply: applyTrendDateRange,
+    })
+  : null;
 
 document.getElementById('trendResetBtn').addEventListener('click', () => {
   customRange = null;
-  document.getElementById('trendFromDate').value = '';
-  document.getElementById('trendToDate').value = '';
-  document.querySelectorAll('#trendToggle .trend-btn').forEach(b => b.classList.remove('active'));
-  document.querySelector('#trendToggle .trend-btn[data-range="week"]').classList.add('active');
+  if (trendDatePicker) trendDatePicker.clear();
   trendRange = 'week';
-  renderTrendChart();
-  renderProfitChart();
-  renderExpenseChart();
+  renderFilteredCharts();
 });
 
 // ---------- message templates ----------
@@ -3124,6 +3210,6 @@ if (isAlreadyLoggedIn()) {
 }
 
 </script>
-<script src="followers-chart.js?v=20261004-auto-range"></script>
+<script src="followers-chart.js?v=20261016-shared-filter"></script>
 </body>
 </html>
