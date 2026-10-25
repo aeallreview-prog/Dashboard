@@ -269,6 +269,7 @@ test('Draft table paginates 0, 10, 11 and 23 items in groups of at most 10', asy
     const items = draftFixtures(count);
     h.api.applyState(state(items));
     assert.equal(h.get('draftCount').textContent, `${count} ชิ้นที่ยังไม่ออกเลข`);
+    assert.equal(h.api.getCount(), count, 'overview counts every Draft, not just the visible page');
     assert.deepEqual(h.visibleDraftIds(), items.slice(0, 10).map(item => item.id));
     if (!count) {
       assert.match(h.get('draftList').innerHTML, /ยังไม่มีแบบร่าง/);

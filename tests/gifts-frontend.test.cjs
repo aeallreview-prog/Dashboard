@@ -191,8 +191,10 @@ test('pagination shows ten uncropped-image frames per page while count and total
   assert.equal((h.get('giftList').innerHTML.match(/data-gift-row=/g) || []).length, 10);
   assert.equal(h.get('giftTotal').textContent, '฿253');
   assert.equal(h.get('giftCount').textContent, '23 ชิ้น');
+  assert.equal(h.api.getCount(), 23, 'overview counts all pages');
   assert.match(h.get('giftPagination').innerHTML, /แสดง 1–10 จาก 23/);
   await h.page(3);
+  assert.equal(h.api.getCount(), 23, 'pagination does not change overview count');
   assert.equal((h.get('giftList').innerHTML.match(/data-gift-row=/g) || []).length, 3);
   assert.match(h.get('giftPagination').innerHTML, /แสดง 21–23 จาก 23/);
   assert.equal(h.get('giftTotal').textContent, '฿253');

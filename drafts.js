@@ -81,6 +81,7 @@
   }
 
   function renderList() {
+    if (typeof window.renderInventoryOverview === 'function') window.renderInventoryOverview();
     const list = byId('draftList');
     const totalPages = Math.max(1, Math.ceil(drafts.length / DRAFT_PAGE_SIZE));
     draftPage = Math.min(draftPage, totalPages);
@@ -439,6 +440,7 @@
   });
 
   window.SNTDrafts = {
+    getCount() { return available ? drafts.length : null; },
     refresh,
     applyState,
     resetProductForm,

@@ -71,7 +71,8 @@ function makeHarness(source) {
     fetch() { throw new Error('Status layout must not access the network'); },
     callWriteApi() { throw new Error('Status layout must not write data'); },
   });
-  vm.runInContext(`${definitions[0]}\n${source.slice(start, end)}`, context);
+  const overview = source.match(/const OVERVIEW_STATUS_DEFS = .*;/)[0];
+  vm.runInContext(`${definitions[0]}\n${overview}\n${source.slice(start, end)}`, context);
   return {
     grid,
     render(counts, total) {
@@ -83,7 +84,7 @@ function makeHarness(source) {
 }
 
 for (const [name, source] of [['app.js', app], ['standalone', standalone]]) {
-  test(`${name}: actual renderer keeps all six cards in their original order`, () => {
+  test(`${name}: actual renderer keeps six product cards and adds Free Gift last`, () => {
     const h = makeHarness(source);
     const expected = [
       ['none', 'ยังไม่ได้ลงขาย', 5],
@@ -94,7 +95,8 @@ for (const [name, source] of [['app.js', app], ['standalone', standalone]]) {
       ['shipped', 'ส่งแล้ว', 25],
     ];
     h.render(Object.fromEntries(expected.map(([key, , count]) => [key, count])), 100);
-    assert.equal(h.grid.children.length, 6);
+    assert.equal(h.grid.children.length, 7);
+    assert.match(h.grid.children[6].innerHTML, /ของแถม/);
     expected.forEach(([key, label, count], index) => {
       const card = h.grid.children[index];
       assert.equal(card.className, 'status-card');
@@ -107,7 +109,7 @@ for (const [name, source] of [['app.js', app], ['standalone', standalone]]) {
   test(`${name}: statuses with no products still have cards and zero counts`, () => {
     const h = makeHarness(source);
     h.render({ none: 2 }, 2);
-    assert.equal(h.grid.children.length, 6);
+    assert.equal(h.grid.children.length, 7);
     assert.match(h.grid.children[0].innerHTML, /100% ของทั้งหมด/);
     for (const card of h.grid.children.slice(1)) {
       assert.match(card.innerHTML, />0<\/strong>/);
@@ -118,7 +120,7 @@ for (const [name, source] of [['app.js', app], ['standalone', standalone]]) {
   test(`${name}: empty history preserves the existing empty message and clears old cards`, () => {
     const h = makeHarness(source);
     h.render({ none: 1 }, 1);
-    assert.equal(h.grid.children.length, 6);
+    assert.equal(h.grid.children.length, 7);
     h.render({}, 0);
     assert.equal(h.grid.children.length, 0);
     assert.equal(h.grid.innerHTML, '<p class="empty">ไม่พบข้อมูลสถานะสินค้าในชีต</p>');

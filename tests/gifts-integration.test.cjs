@@ -337,7 +337,7 @@ function makeLoadDataHarness(errorRevision) {
     buildUrl: () => 'test-products', parseGviz: JSON.parse, Date,
     cellText: cell => cell && cell.v || '', colToIndex: () => 14,
     tallyStatuses: () => ({ counts: {}, total: 0, other: 0 }),
-    renderStatusGrid() {}, renderDonut() {}, renderProductTable() {}, doSearch() {},
+    renderStatusGrid() {}, renderDonut() {}, renderInventoryOverview() {}, renderProductTable() {}, doSearch() {},
     clearError() {}, setStatus() {}, showError() {}, console: { error() {} },
     showDraftFinanceError(error) { errors.push(error.message); },
   });

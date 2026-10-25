@@ -124,6 +124,7 @@
   }
 
   function render() {
+    if (typeof window.renderInventoryOverview === 'function') window.renderInventoryOverview();
     const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
     page = Math.max(1, Math.min(page, totalPages));
     const start = (page - 1) * PAGE_SIZE;
@@ -421,5 +422,5 @@
     render();
   }
 
-  window.SNTGifts = { init, refresh, resetForConfig };
+  window.SNTGifts = { init, refresh, resetForConfig, getCount() { return available ? items.length : null; } };
 })();

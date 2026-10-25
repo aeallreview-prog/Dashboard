@@ -17,6 +17,28 @@ const STATUS_COLOR_HEX = {
 };
 const LABEL_TO_KEY = {};
 STATUS_DEFS.forEach(s => LABEL_TO_KEY[s.label] = s.key);
+// Overview-only category: never offer gifts as a product's editable status.
+const OVERVIEW_STATUS_DEFS = [...STATUS_DEFS, { key: 'gift', label: 'ของแถม', color: '#df7297' }];
+STATUS_COLOR_HEX.gift = '#df7297';
+let overviewProducts = null;
+
+function renderInventoryOverview() {
+  if (!overviewProducts) return;
+  const drafts = window.SNTDrafts?.getCount?.();
+  const gifts = window.SNTGifts?.getCount?.();
+  const counts = { ...overviewProducts.counts };
+  counts.none += drafts ?? 0;
+  counts.gift = gifts ?? 0;
+  const total = overviewProducts.total + (drafts ?? 0) + (gifts ?? 0);
+  const pending = [];
+  if (drafts == null) pending.push('Draft');
+  if (gifts == null) pending.push('Free Gift');
+  renderStatusGrid(counts, total);
+  renderDonut(counts, total);
+  document.getElementById('totalItemsTag').textContent = `รวม ${total} รายการ` +
+    (pending.length ? ` · ยังไม่รวม ${pending.join(' / ')} (ยังยืนยันข้อมูลไม่ได้)` : '') +
+    (overviewProducts.other ? ` · พบสถานะอื่น ${overviewProducts.other} รายการ` : '');
+}
 
 const DEFAULTS = {
   sheetId: '1uWbyx7ojEQ5iZpY6XSlk2xFiAko5bdVcsjjyMg4_OJg',
@@ -180,7 +202,7 @@ function renderStatusGrid(counts, total) {
     grid.innerHTML = '<p class="empty">ไม่พบข้อมูลสถานะสินค้าในชีต</p>';
     return;
   }
-  STATUS_DEFS.forEach(def => {
+  OVERVIEW_STATUS_DEFS.forEach(def => {
     const n = counts[def.key] || 0;
     const pct = total ? Math.round((n / total) * 100) : 0;
     const card = document.createElement('div');
@@ -212,7 +234,7 @@ function renderDonut(counts, total) {
 
   let acc = 0;
   const stops = [];
-  STATUS_DEFS.forEach(def => {
+  OVERVIEW_STATUS_DEFS.forEach(def => {
     const n = counts[def.key] || 0;
     if (n <= 0) return;
     const start = (acc / total) * 360;
@@ -222,7 +244,7 @@ function renderDonut(counts, total) {
   });
   chart.style.background = `conic-gradient(${stops.join(', ')})`;
 
-  STATUS_DEFS.forEach(def => {
+  OVERVIEW_STATUS_DEFS.forEach(def => {
     const n = counts[def.key] || 0;
     const pct = total ? Math.round((n / total) * 100) : 0;
     const row = document.createElement('div');
@@ -791,11 +813,8 @@ async function loadData() {
       counts = r.counts; total = r.total; other = r.other;
     }
 
-    document.getElementById('totalItemsTag').textContent =
-      total ? `รวม ${total} รายการ` + (other ? ` · พบสถานะอื่นอีก ${other} รายการที่ไม่ตรง 4 กลุ่ม` : '') : '';
-
-    renderStatusGrid(counts, total);
-    renderDonut(counts, total);
+    overviewProducts = { counts, total, other };
+    renderInventoryOverview();
     renderProductTable();
 
     // keep an active search result live/up to date after each refresh
@@ -812,6 +831,11 @@ async function loadData() {
     } catch (err) {
       const failedRevision = Number.isFinite(err.financeRevision) ? err.financeRevision : financeRevision;
       if (sequence === dataLoadSequence && failedRevision === draftFinanceRevision) showDraftFinanceError(err);
+    }
+    // The overview includes gifts even when the Free Gift page is not open.
+    if (sequence === dataLoadSequence && window.SNTGifts) {
+      try { await window.SNTGifts.refresh(); } catch (_) { /* Gift page displays the error. */ }
+      renderInventoryOverview();
     }
   } catch (err) {
     console.error(err);
@@ -910,7 +934,6 @@ document.addEventListener('click', (e) => {
 
 // ---------- calculate (price + shipping) ----------
 const SHIPPING_BASE = 50;
-const SHIPPING_PER_EXTRA_ITEM = 5;
 const REMOTE_AREA_FEE = 50;
 let lastCalcMessage = '';
 let calcItems = []; // [{no, price, qty, status}]
@@ -927,8 +950,8 @@ function extractPriceFromDetail(text) {
 
 function buildCustomerMessage(subtotal, shipping, total, remoteArea) {
   const fmt = n => Number(n).toLocaleString('th-TH');
-  const remoteNote = remoteArea ? ` + พื้นที่ห่างไกล ${fmt(REMOTE_AREA_FEE)} บ.` : '';
-  return `รวมสินค้า ${fmt(subtotal)} + ค่าส่ง ${fmt(shipping)} (เริ่มต้น ${fmt(SHIPPING_BASE)} บ. + เพิ่มชิ้นละ ${fmt(SHIPPING_PER_EXTRA_ITEM)} บ.${remoteNote}) = ${fmt(total)} บาทค่ะ 🌟🌈✨️`;
+  const remoteNote = remoteArea ? ` + ค่าส่งเพิ่มสำหรับพื้นที่พิเศษ ${fmt(REMOTE_AREA_FEE)} บ.` : '';
+  return `รวมสินค้า ${fmt(subtotal)} + ค่าส่งเหมาจ่าย ${fmt(SHIPPING_BASE)} บ.${remoteNote} = ${fmt(total)} บาทค่ะ 🌟🌈✨️`;
 }
 
 function copyCalcMessage() {
@@ -962,29 +985,22 @@ function renderCalcTotals() {
 
   const subtotal = calcItems.reduce((sum, item) => sum + item.price * item.qty, 0);
   const totalQty = calcItems.reduce((sum, item) => sum + item.qty, 0);
-  const extraItems = Math.max(0, totalQty - 1);
-  const shippingExtra = extraItems * SHIPPING_PER_EXTRA_ITEM;
   const remoteFee = remoteAreaChecked ? REMOTE_AREA_FEE : 0;
-  const shipping = SHIPPING_BASE + shippingExtra + remoteFee;
+  const shipping = SHIPPING_BASE + remoteFee;
   const total = subtotal + shipping;
 
-  const extraLine = extraItems > 0
-    ? `<div class="calc-row"><span>ค่าส่งเพิ่ม (${extraItems} ชิ้น × ${fmtMoney(SHIPPING_PER_EXTRA_ITEM)})</span><span>${fmtMoney(shippingExtra)}</span></div>`
-    : '';
-
   const remoteFeeLine = remoteAreaChecked
-    ? `<div class="calc-row"><span>ค่าส่งพื้นที่ห่างไกล</span><span>${fmtMoney(REMOTE_AREA_FEE)}</span></div>`
+    ? `<div class="calc-row"><span>ค่าส่งพื้นที่ห่างไกลหรือพื้นที่ท่องเที่ยวพิเศษ</span><span>${fmtMoney(REMOTE_AREA_FEE)}</span></div>`
     : '';
 
   lastCalcMessage = buildCustomerMessage(subtotal, shipping, total, remoteAreaChecked);
 
   totalsBox.innerHTML = `
     <div class="calc-row"><span>ราคาสินค้ารวม (${totalQty} ชิ้น)</span><span>${fmtMoney(subtotal)}</span></div>
-    <div class="calc-row"><span>ค่าส่งเริ่มต้น</span><span>${fmtMoney(SHIPPING_BASE)}</span></div>
-    ${extraLine}
+    <div class="calc-row"><span>ค่าส่งเหมาจ่าย</span><span>${fmtMoney(SHIPPING_BASE)}</span></div>
     <label class="calc-checkbox-row">
       <input type="checkbox" ${remoteAreaChecked ? 'checked' : ''} onchange="toggleRemoteArea(this.checked)">
-      พื้นที่ห่างไกล (+${fmtMoney(REMOTE_AREA_FEE)})
+      พื้นที่ห่างไกลหรือพื้นที่ท่องเที่ยวพิเศษ (+${fmtMoney(REMOTE_AREA_FEE)})
     </label>
     ${remoteFeeLine}
     <div class="calc-divider"></div>
@@ -1099,6 +1115,7 @@ document.getElementById('settingsSave').addEventListener('click', () => {
   };
   cachedAutoStatusCol = null; // sheet/column settings changed — re-detect once, fresh
   latestFinanceObservedAt = 0;
+  overviewProducts = null;
   if (window.SNTDrafts) window.SNTDrafts.resetForConfig();
   if (window.SNTGifts) window.SNTGifts.resetForConfig();
   savedFinanceSnapshots = [];

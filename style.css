@@ -158,14 +158,21 @@ button {
   border: 0; border-radius: 16px; background: var(--blue); color: #fff;
   padding: 10px 16px; font: 600 12px 'DM Sans', sans-serif; cursor: pointer;
   display: inline-flex; align-items: center; gap: 6px;
+  touch-action: manipulation;
 }
 button.ghost { background: var(--paper); color: var(--ink); }
-button:hover { background: var(--accent); }
-button.ghost:hover { background: var(--line); color: var(--ink); }
+@media (hover: hover) and (pointer: fine) {
+  button:hover { background: var(--accent); }
+  button.ghost:hover { background: var(--line); color: var(--ink); }
+}
 button.btn-yellow { background: #eab308; color: #fff; }
-button.btn-yellow:hover { background: #ca8a04; }
+@media (hover: hover) and (pointer: fine) {
+  button.btn-yellow:hover { background: #ca8a04; }
+}
 button.btn-red { background: #d64545; color: #fff; }
-button.btn-red:hover { background: #b93b3b; }
+@media (hover: hover) and (pointer: fine) {
+  button.btn-red:hover { background: #b93b3b; }
+}
 button:disabled { opacity: .55; cursor: wait; }
 
 .summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; padding: 6px 0 18px; }
