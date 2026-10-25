@@ -66,8 +66,10 @@ test('both overview charts use all Draft and Gift counts, without mutating produ
 test('gifts stay out of product status selectors; overview reads full module arrays', () => {
   assert.doesNotMatch(app.match(/const STATUS_DEFS = \[[\s\S]*?\n\];/)[0], /ของแถม/);
   assert.match(read('drafts.js'), /getCount\(\) \{ return available \? drafts.length : null; \}/);
-  assert.match(read('gifts.js'), /getCount\(\) \{ return available \? items.length : null; \}/);
-  assert.match(app.slice(app.indexOf('async function loadData'), app.indexOf('function startPolling')), /await window.SNTGifts.refresh\(\)/);
+  assert.match(read('gifts.js'), /getCount\(\) \{ return overviewCount; \}/);
+  const load = app.slice(app.indexOf('async function loadData'), app.indexOf('function startPolling'));
+  assert.ok(load.indexOf('SNTGifts.refreshCount()') < load.indexOf('await fetch('));
+  assert.doesNotMatch(load, /await window.SNTGifts.refresh\(\)/);
 });
 
 test('generic orange button hover is mouse-only and tapping does not add a second submit handler', () => {

@@ -82,6 +82,64 @@ function harness(initial = state()) {
   };
 }
 
+test('overview count loads independently without finance, images or enabling gift writes', async () => {
+  const h = harness();
+  const pending = deferred();
+  h.handler(() => pending.promise);
+  const first = h.api.refreshCount();
+  const second = h.api.refreshCount();
+  assert.equal(h.calls.length, 1);
+  assert.equal(h.calls[0].action, 'getGiftCount');
+  pending.resolve({ spreadsheetId: 'sheet-a', sourceSheetName: 'สินค้า', count: 23, observedAt: new Date().toISOString() });
+  await Promise.all([first, second]);
+  assert.equal(h.api.getCount(), 23);
+  assert.equal(h.get('giftSaveBtn').disabled, true);
+  assert.equal(h.financeCalls.length, 0);
+  assert.equal(h.snapshotCalls.length, 0);
+});
+
+test('late count success or failure cannot overwrite a newer full gift read', async () => {
+  for (const fails of [false, true]) {
+    const h = harness();
+    const pending = deferred();
+    h.handler(action => action === 'getGiftCount' ? pending.promise : state([item(3), item(4)]));
+    const count = h.api.refreshCount();
+    await h.api.refresh();
+    if (fails) pending.reject(new Error('offline'));
+    else pending.resolve({ spreadsheetId: 'sheet-a', sourceSheetName: 'สินค้า', count: 99, observedAt: new Date().toISOString() });
+    await count;
+    assert.equal(h.api.getCount(), 2);
+  }
+});
+
+test('count rejects wrong-sheet and invalid counts and clears on configuration reset', async () => {
+  const h = harness();
+  for (const override of [{spreadsheetId: 'wrong'}, {count: -1}, {count: 1.5}, {observedAt: 'invalid'}]) {
+    h.handler(() => ({spreadsheetId: 'sheet-a', sourceSheetName: 'สินค้า', count: 3, observedAt: new Date().toISOString(), ...override}));
+    await h.api.refreshCount();
+    assert.equal(h.api.getCount(), null);
+  }
+  const pending = deferred();
+  h.handler(() => pending.promise);
+  const read = h.api.refreshCount();
+  h.config.sheetId = 'sheet-b';
+  h.api.resetForConfig();
+  pending.resolve({spreadsheetId: 'sheet-a', sourceSheetName: 'สินค้า', count: 7, observedAt: new Date().toISOString()});
+  await read;
+  assert.equal(h.api.getCount(), null);
+});
+
+test('older backend falls back to a full read only for unsupported count action', async () => {
+  const h = harness();
+  h.handler(action => {
+    if (action === 'getGiftCount') throw new Error('unknown action: getGiftCount');
+    return state([item(3)]);
+  });
+  await h.api.refreshCount();
+  assert.equal(h.api.getCount(), 1);
+  assert.deepEqual(h.calls.map(call => call.action), ['getGiftCount', 'getGiftState']);
+});
+
 test('init is idempotent and does not read or write before parent starts a logged-in refresh', async () => {
   const h = harness();
   h.api.init();

@@ -342,8 +342,23 @@ function makeLoadDataHarness(errorRevision) {
     showDraftFinanceError(error) { errors.push(error.message); },
   });
   vm.runInContext(functionSource(app, 'loadData'), context);
-  return { run: () => vm.runInContext('loadData()', context), errors };
+  return { run: () => vm.runInContext('loadData()', context), errors, context };
 }
+
+test('overview starts gift count before products and does not wait for it or request full gift state', async () => {
+  const h = makeLoadDataHarness();
+  const events = [];
+  let finishCount;
+  h.context.window.SNTGifts = {
+    refreshCount() { events.push('count'); return new Promise(resolve => { finishCount = resolve; }); },
+    refresh() { throw new Error('Overview must not request full gift state'); },
+  };
+  h.context.fetch = async () => { events.push('products'); return {ok: true, text: async () => JSON.stringify({rows: []})}; };
+  h.context.window.SNTDrafts.refresh = async () => { events.push('drafts'); };
+  await h.run();
+  assert.deepEqual(events, ['count', 'products', 'drafts']);
+  finishCount();
+});
 
 test('loadData joining a pre-gift Draft request cannot blank the newer gift totals', async () => {
   const h = makeLoadDataHarness(4);

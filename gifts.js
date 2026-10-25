@@ -13,6 +13,9 @@
   let configEpoch = 0;
   let stateRevision = 0;
   let refreshRequest = null;
+  let countRequest = null;
+  let overviewCount = null;
+  let countRevision = 0;
   let saveRequest = null;
   let editing = null;
   // An uncertain write must retry the exact same row/version and values.
@@ -165,6 +168,9 @@
     stateRevision += 1;
     refreshRequest = null;
     saveRequest = null;
+    countRequest = null;
+    overviewCount = null;
+    countRevision += 1;
     items = [];
     page = 1;
     lastState = null;
@@ -210,6 +216,8 @@
     lastState = state;
     available = true;
     stateRevision += 1;
+    overviewCount = items.length;
+    countRevision += 1;
     render();
     return state;
   }
@@ -257,6 +265,40 @@
 
   function isCurrent(request) {
     return request.epoch === configEpoch && request.key === currentConfigKey();
+  }
+
+  async function refreshCount() {
+    ensureConfig();
+    if (saveRequest) return overviewCount;
+    if (countRequest) return countRequest.promise;
+    const request = { epoch: configEpoch, key: configKey, revision: countRevision, promise: null };
+    countRequest = request;
+    request.promise = (async () => {
+      try {
+        const state = await callWriteApi('getGiftCount', { spreadsheetId: config.sheetId, sourceSheetName: config.sheetName || '' });
+        if (!isCurrent(request) || request.revision !== countRevision) return overviewCount;
+        if (!state || state.spreadsheetId !== config.sheetId || typeof state.sourceSheetName !== 'string' ||
+            !state.sourceSheetName.trim() || (config.sheetName && state.sourceSheetName !== config.sheetName) ||
+            !Number.isSafeInteger(state.count) || state.count < 0 || !Number.isFinite(Date.parse(state.observedAt))) {
+          throw new Error('ยังยืนยันจำนวนของแถมไม่ได้ กรุณาโหลดล่าสุด');
+        }
+        overviewCount = state.count;
+        countRevision += 1;
+        return overviewCount;
+      } catch (error) {
+        if (!isCurrent(request) || request.revision !== countRevision) return overviewCount;
+        overviewCount = null;
+        // Compatibility while the website and Apps Script are upgraded separately.
+        if (/unknown action|ไม่รู้จัก action/i.test(String(error && error.message || error))) {
+          await refresh();
+        }
+        return overviewCount;
+      } finally {
+        if (countRequest === request) countRequest = null;
+        if (isCurrent(request) && typeof window.renderInventoryOverview === 'function') window.renderInventoryOverview();
+      }
+    })();
+    return request.promise;
   }
 
   async function refresh() {
@@ -332,6 +374,7 @@
     saveRequest = request;
     // Any read already in flight predates this write, even if it resolves later.
     stateRevision += 1;
+    countRevision += 1;
     renderControls();
     feedback('กำลังบันทึกของแถม…', false);
     try {
@@ -422,5 +465,5 @@
     render();
   }
 
-  window.SNTGifts = { init, refresh, resetForConfig, getCount() { return available ? items.length : null; } };
+  window.SNTGifts = { init, refresh, refreshCount, resetForConfig, getCount() { return overviewCount; } };
 })();

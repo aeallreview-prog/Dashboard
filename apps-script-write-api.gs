@@ -38,7 +38,7 @@ function doPost(e) {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = ss.getSheets()[PRODUCT_SHEET_INDEX];
 
-    if (body.action === 'getGiftState' || body.action === 'saveGift') {
+    if (body.action === 'getGiftState' || body.action === 'getGiftCount' || body.action === 'saveGift') {
       // Gift rows never mutate products or drafts. Reads are side-effect free;
       // saves may append current source totals to the existing finance history.
       // In particular, reading gifts must never replay a draft transfer.
@@ -46,7 +46,8 @@ function doPost(e) {
       giftLock.waitLock(30000);
       try {
         validateGiftSource(ss, sheet, body);
-        result = body.action === 'getGiftState' ? getGiftState(ss, sheet) : saveGift(ss, sheet, body);
+        result = body.action === 'getGiftCount' ? getGiftCount(ss, sheet) :
+          body.action === 'getGiftState' ? getGiftState(ss, sheet) : saveGift(ss, sheet, body);
       } finally {
         giftLock.releaseLock();
       }
@@ -161,6 +162,22 @@ function giftStateFromRows(ss, sheet, data) {
     }),
     nextRow: data.nextRow, nextVersion: data.nextVersion, observedAt: new Date().toISOString()
   };
+}
+
+function getGiftCount(ss, sheet) {
+  // Same occupied-row rules as Free Gift, without finance/history reads or
+  // transferring customer names, images, notes and row versions to the chart.
+  var width = Math.max(0, Math.min(GIFT_COLUMN_COUNT, sheet.getMaxColumns() - GIFT_FIRST_COLUMN + 1));
+  var lastRow = sheet.getLastRow(), count = 0;
+  if (width && lastRow >= GIFT_FIRST_ROW) {
+    var range = sheet.getRange(GIFT_FIRST_ROW, GIFT_FIRST_COLUMN, lastRow - GIFT_FIRST_ROW + 1, width);
+    var values = range.getValues(), formulas = range.getFormulas();
+    for (var i = 0; i < values.length; i++) {
+      if (values[i].some(function (value) { return value !== '' && value !== null; }) ||
+          formulas[i].some(function (formula) { return formula !== ''; })) count++;
+    }
+  }
+  return { spreadsheetId: ss.getId(), sourceSheetName: sheet.getName(), count: count, observedAt: new Date().toISOString() };
 }
 
 function getGiftState(ss, sheet) {

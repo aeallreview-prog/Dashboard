@@ -784,6 +784,8 @@ async function loadData() {
   const sequence = ++dataLoadSequence;
   document.getElementById('refreshBtn').disabled = true;
   setStatus('', 'กำลังอัปเดต...');
+  // Start the lightweight count alongside products, before Draft/finance reads.
+  if (window.SNTGifts) window.SNTGifts.refreshCount().catch(() => {});
   try {
     const res = await fetch(buildUrl(config), { cache: 'no-store' });
     if (!res.ok) throw new Error('เชื่อมต่อ Google Sheet ไม่สำเร็จ (HTTP ' + res.status + ')');
@@ -831,11 +833,6 @@ async function loadData() {
     } catch (err) {
       const failedRevision = Number.isFinite(err.financeRevision) ? err.financeRevision : financeRevision;
       if (sequence === dataLoadSequence && failedRevision === draftFinanceRevision) showDraftFinanceError(err);
-    }
-    // The overview includes gifts even when the Free Gift page is not open.
-    if (sequence === dataLoadSequence && window.SNTGifts) {
-      try { await window.SNTGifts.refresh(); } catch (_) { /* Gift page displays the error. */ }
-      renderInventoryOverview();
     }
   } catch (err) {
     console.error(err);

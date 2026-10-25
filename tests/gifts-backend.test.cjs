@@ -113,6 +113,39 @@ function setup(options = {}) {
   };
 }
 
+test('lightweight count matches occupied gift rows without reading finance or history', () => {
+  const s = setup();
+  s.products.set(3, 28, 0);
+  s.products.set(5, 29, 'customer');
+  s.products.set(6, 30, 'image');
+  s.products.set(7, 31, 'note');
+  s.products.set(8, 28, { formula: '=IF(TRUE,"",1)', value: '' });
+  s.products.set(9, 4, 'product only');
+  const expected = s.state().items.length;
+  s.ctx.readDraftFinance = () => { throw new Error('Count must not read finance'); };
+  s.ctx.latestGiftFinanceSnapshot = () => { throw new Error('Count must not read history'); };
+  const result = s.api('getGiftCount');
+  assert.equal(result.ok, true);
+  assert.equal(result.result.count, 5);
+  assert.equal(result.result.count, expected);
+  assert.deepEqual(Object.keys(result.result).sort(), ['count', 'observedAt', 'sourceSheetName', 'spreadsheetId']);
+  assert.deepEqual(s.mutations, []);
+  assert.equal(s.recoveryCount, 0);
+  assert.equal(s.locked, false);
+  assert.equal(s.api('getGiftCount', { spreadsheetId: 'wrong' }).ok, false);
+  assert.equal(s.api('getGiftCount', { secret: 'wrong' }).ok, false);
+});
+
+test('lightweight count handles empty sheets and missing gift columns', () => {
+  for (const columns of [20, 28, 30, 31]) {
+    const s = setup({ columns });
+    const result = s.api('getGiftCount');
+    assert.equal(result.ok, true);
+    assert.equal(result.result.count, 0);
+    assert.deepEqual(s.mutations, []);
+  }
+});
+
 test('empty gift state is read-only, scoped and locked without draft recovery', () => {
   const s = setup();
   const state = s.state();
