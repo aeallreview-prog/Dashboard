@@ -28,9 +28,11 @@ for (const file of ['app.js', 'seek-n-tique-dashboard.html']) {
       assert.match(nodes.calcTotalsBox.innerHTML, /ค่าส่งเหมาจ่าย/);
       assert.doesNotMatch(nodes.calcMessageText.textContent, /ชิ้นละ|เริ่มต้น/);
       assert.match(nodes.calcMessageText.textContent, /ค่าส่งเหมาจ่าย 50 บ\./);
+      assert.match(nodes.calcMessageText.textContent, /\n= [\d,]+ บาทค่ะ 🌟🌈✨️$/);
       assert.doesNotMatch(nodes.calcMessageText.textContent, /[()]|ค่าส่งเพิ่ม/);
       vm.runInContext('toggleRemoteArea(true)', context);
       assert.match(nodes.calcMessageText.textContent, /ค่าส่งเพิ่มสำหรับพื้นที่พิเศษ 50 บ\./);
+      assert.match(nodes.calcMessageText.textContent, /\n= [\d,]+ บาทค่ะ 🌟🌈✨️$/);
       assert.doesNotMatch(nodes.calcMessageText.textContent, /พื้นที่ห่างไกลหรือพื้นที่ท่องเที่ยวพิเศษ/);
       assert.doesNotMatch(nodes.calcMessageText.textContent, /[()]/);
       assert.match(nodes.calcMessageText.textContent, new RegExp(`= ${(quantity * 100 + 100).toLocaleString('th-TH')} บาท`));

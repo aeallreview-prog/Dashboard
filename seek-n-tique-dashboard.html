@@ -2147,7 +2147,7 @@ function extractPriceFromDetail(text) {
 function buildCustomerMessage(subtotal, shipping, total, remoteArea) {
   const fmt = n => Number(n).toLocaleString('th-TH');
   const remoteNote = remoteArea ? ` + ค่าส่งเพิ่มสำหรับพื้นที่พิเศษ ${fmt(REMOTE_AREA_FEE)} บ.` : '';
-  return `รวมสินค้า ${fmt(subtotal)} + ค่าส่งเหมาจ่าย ${fmt(SHIPPING_BASE)} บ.${remoteNote} = ${fmt(total)} บาทค่ะ 🌟🌈✨️`;
+  return `รวมสินค้า ${fmt(subtotal)} + ค่าส่งเหมาจ่าย ${fmt(SHIPPING_BASE)} บ.${remoteNote}\n= ${fmt(total)} บาทค่ะ 🌟🌈✨️`;
 }
 
 function copyCalcMessage() {
