@@ -439,7 +439,7 @@ function renderSearchResult(row) {
   const noVal = cellText(row.c && row.c[0]) || '-';
   let fields = '';
 
-  DISPLAY_COLS.forEach(i => {
+  getVisibleCols().forEach(i => {
     const rawText = getProductDisplayText(row, i);
     const text = rawText || '-';
 
@@ -555,6 +555,7 @@ function populateStatusFilterOptions() {
   hideBox.addEventListener('change', () => {
     hideSensitiveData = hideBox.checked;
     renderProductTable();
+    doSearch();
   });
 }
 

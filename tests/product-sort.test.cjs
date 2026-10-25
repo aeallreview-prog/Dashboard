@@ -84,6 +84,7 @@ function makeHarness() {
     headerLabel: col => String(col),
     attachDragScrollAll() {},
     fixExpandedRowWidths() {},
+    doSearch() {},
     callWriteApi() { throw new Error('Sorting must not write to the spreadsheet'); },
     fetch() { throw new Error('Sorting must not make a network request'); },
   });

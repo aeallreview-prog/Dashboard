@@ -194,6 +194,25 @@ test('sensitive data stays hidden and each profit sort marks only its own column
   assert.doesNotMatch(h.table(row), /50%|987654|777/);
 });
 
+for (const [name, text] of [['modular', source], ['standalone', standalone]]) {
+  test(`${name}: search and expanded details hide sensitive fields until explicitly opened`, () => {
+    const h = makeHarness(text);
+    const row = product({E: 12345, H: 24690, I: 87654, J: 76543, K: 'PRIVATE-NOTE', L: 65432});
+    h.run('hideSensitiveData = true');
+    h.run("expandedProductRows.add('001')");
+    for (const html of [h.search(row), h.table(row)]) {
+      assert.doesNotMatch(html, /12345|24690|87654|76543|PRIVATE-NOTE|65432|100%/);
+      assert.match(html, /เก้าอี้ไม้/);
+    }
+    h.run('hideSensitiveData = false');
+    for (const html of [h.search(row), h.table(row)]) assert.match(html, /PRIVATE-NOTE/);
+    h.run('hideSensitiveData = true');
+    for (const html of [h.search(row), h.table(row)]) assert.doesNotMatch(html, /PRIVATE-NOTE/);
+    assert.match(text, /let hideSensitiveData = true/);
+    assert.match(text, /hideSensitiveData = hideBox.checked;\s*renderProductTable\(\);\s*doSearch\(\);/);
+  });
+}
+
 test('standalone and modular dashboard use identical percentage constants and rendering logic', () => {
   assert.equal(columnConstants(standalone), columnConstants(source));
   for (const name of ['getProductProfitPercent', 'formatProductProfitPercent', 'getProductDisplayText', 'renderSearchResult', 'renderProductTableRow']) {
