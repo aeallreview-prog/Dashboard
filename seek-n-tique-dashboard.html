@@ -1517,6 +1517,7 @@ function formatProductProfitPercent(row) {
 
 function getProductDisplayText(row, columnIndex) {
   // Derived for display only: keep the sheet's G value and all baht totals intact.
+  if (columnIndex === DETAIL_COL) return cellText(row.c && row.c[columnIndex]).replaceAll('(ราคายังไม่รวมค่าจัดส่ง)', '🚀 ค่าส่งเหมาจ่าย 50 บ.');
   return columnIndex === PROFIT_PERCENT_COL ? formatProductProfitPercent(row) : cellText(row.c && row.c[columnIndex]);
 }
 
@@ -2839,7 +2840,7 @@ function assembleDetailTemplate() {
     priceLine,
   ];
   if (priceUnit === 'ใบ' && stock) lines.push(`In Stock : ${stock} ใบ`);
-  lines.push('(ราคายังไม่รวมค่าจัดส่ง)', '--------------------', closing || DEFAULT_CLOSING_NOTE);
+  lines.push('🚀 ค่าส่งเหมาจ่าย 50 บ.', '--------------------', closing || DEFAULT_CLOSING_NOTE);
   document.getElementById('pfC').value = lines.join('\n');
 }
 document.getElementById('tplGenerateBtn').addEventListener('click', assembleDetailTemplate);
@@ -2864,7 +2865,7 @@ function parseDetailTemplate(text) {
   // A missing divider must not turn sizes, prices or closing notes into a product name.
   const titleBlock = text
     .replace(/^No\.[ \t]*\d+[ \t]*/i, '')
-    .split(/^[ \t]*-{3,}[ \t]*$|(?:^|\n)[ \t]*(?:ราคา[ \t]*[:：]|In Stock[ \t]*[:：]|\(ราคายังไม่รวมค่าจัดส่ง\)|สินค้าเป็นของสะสม|#)/im)[0];
+    .split(/^[ \t]*-{3,}[ \t]*$|(?:^|\n)[ \t]*(?:ราคา[ \t]*[:：]|In Stock[ \t]*[:：]|\(ราคายังไม่รวมค่าจัดส่ง\)|🚀 ค่าส่งเหมาจ่าย 50 บ\.|สินค้าเป็นของสะสม|#)/im)[0];
   const title = titleBlock.split('\n').map(line => {
     const withoutDimensions = line.replace(dimensionPattern, '');
     if (withoutDimensions !== line || /^[ \t]*ขนาด[ \t]*[:：]?[ \t]*$/.test(line)) {
@@ -2882,7 +2883,7 @@ function parseDetailTemplate(text) {
   const stockMatch = text.match(/In Stock\s*:\s*([^\s]+)\s*ใบ/);
   if (stockMatch && !isBlank(stockMatch[1])) result.stock = stockMatch[1];
 
-  const closingMatch = text.match(/\(ราคายังไม่รวมค่าจัดส่ง\)\s*\n-+\s*\n([\s\S]*)$/);
+  const closingMatch = text.match(/(?:\(ราคายังไม่รวมค่าจัดส่ง\)|🚀 ค่าส่งเหมาจ่าย 50 บ\.)\s*\n-+\s*\n([\s\S]*)$/);
   if (closingMatch) result.closing = closingMatch[1].trim();
 
   return result;
@@ -2928,7 +2929,7 @@ function openEditProductModal(noVal) {
   document.getElementById('productFormTitle').textContent = `แก้ไขสินค้า No. ${noVal}`;
   document.getElementById('productFormSubtitle').textContent = 'แก้เฉพาะช่องที่เปลี่ยน แล้วกดบันทึก';
   document.getElementById('pfP').value = cellText(row.c && row.c[IMAGE_COL]);
-  const detailText = cellText(row.c && row.c[DETAIL_COL]);
+  const detailText = getProductDisplayText(row, DETAIL_COL);
   document.getElementById('pfC').value = detailText;
   fillTemplateBuilderFrom(detailText);
   document.getElementById('pfE').value = cellText(row.c && row.c[colToIndex('E')]);
@@ -2970,7 +2971,7 @@ async function saveProductForm() {
   errEl.textContent = '';
   const rawFields = {
     P: document.getElementById('pfP').value.trim(),
-    C: document.getElementById('pfC').value,
+    C: document.getElementById('pfC').value.replaceAll('(ราคายังไม่รวมค่าจัดส่ง)', '🚀 ค่าส่งเหมาจ่าย 50 บ.'),
     E: document.getElementById('pfE').value,
     F: document.getElementById('pfF').value,
     H: document.getElementById('pfH').value,
