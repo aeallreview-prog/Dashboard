@@ -171,13 +171,13 @@ const followerRows = [
 ];
 const chartIds = { revenue: 'trendSvgHolder', profit: 'profitSvgHolder', expense: 'expenseSvgHolder', followers: 'followerChart' };
 
-async function makeHarness({ rows = followerRows, loadFollowers = true } = {}) {
+async function makeHarness({ rows = followerRows, loadFollowers = true, now = Math.max(...rows.map(row => Date.parse(row.observedAt))) } = {}) {
   const dom = makeDom();
   const pickers = pickerStub();
   const rendered = [];
   const requests = [];
   const context = vm.createContext({
-    document: dom.document, Date, Map, Set, Number, Intl, console, rendered,
+    document: dom.document, Date: class extends Date { static now() { return now; } }, Map, Set, Number, Intl, console, rendered,
     setTimeout: () => 1, clearTimeout() {}, setInterval: () => 1,
     ResizeObserver: class { observe() {} },
     captureChart(points) {
@@ -254,7 +254,7 @@ test('one date range filters all four charts at exact inclusive Bangkok day boun
     range: 'day',
     customRange: { from: Date.parse('2026-10-03T00:00:00+07:00'), to: Date.parse('2026-10-08T23:59:59.999+07:00') },
   });
-  for (const [metric, expected] of Object.entries({ revenue: [200, 300], profit: [20, 30], expense: [180, 270], followers: [310, 340] })) {
+  for (const [metric, expected] of Object.entries({ revenue: [200, 300], profit: [20, 30], expense: [180, 270], followers: [310, 310, 310, 310, 310, 340] })) {
     assert.deepEqual(h.values(metric), expected, metric);
   }
   assert.equal(h.run('customRange.from.getTime()'), h.state().customRange.from);
@@ -290,7 +290,7 @@ test('invalid shared dates cannot change any chart or notify shared consumers', 
 });
 
 for (const [range, indexes, expectedFollowers] of [
-  ['day', [1, 2, 3, 4], [301, 310, 340, 350]],
+  ['day', [1, 2, 3, 4], [301, 310, 310, 310, 310, 310, 340, 350]],
   ['week', [2, 4], [310, 350]], ['month', [4], [350]], ['year', [4], [350]],
 ]) {
   test(`shared ${range} preset clears custom dates and groups every line chart consistently`, async () => {
@@ -310,7 +310,7 @@ for (const [range, indexes, expectedFollowers] of [
 }
 
 for (const [range, expectedRevenue, expectedFollowers] of [
-  ['day', [200, 300], [310, 340]], ['week', [200, 300], [310, 340]],
+  ['day', [200, 300], [310, 310, 310, 310, 310, 340]], ['week', [200, 300], [310, 340]],
   ['month', [300], [340]], ['year', [300], [340]],
 ]) {
   test(`applying shared dates retains the chosen ${range} grouping for all charts`, async () => {
@@ -376,7 +376,7 @@ test('read-only follower refresh preserves shared dates and grouping', async () 
 });
 
 test('confirmed manual follower save retains range and excludes the out-of-range new point', async () => {
-  const h = await makeHarness();
+  const h = await makeHarness({now: Date.parse('2026-10-16T09:00:00Z')});
   await h.preset('month');
   h.picker.apply('2026-10-03', '2026-10-08');
   const before = h.state();

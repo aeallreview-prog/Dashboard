@@ -1,6 +1,33 @@
-/* Group real observations in Bangkok time; keep the last reading in each interval. */
-function buildFollowerPoints(rows, range, customRange) {
+/* Carry the last real count across missing Bangkok days for display only. */
+function buildFollowerPoints(rows, range, customRange, now = Date.now()) {
   const DAY = 86400000;
+  const offset = 7 * 3600000;
+  const daily = new Map();
+  const today = Math.floor((now + offset) / DAY);
+  rows.forEach(row => {
+    const time = Date.parse(row.observedAt);
+    const day = Math.floor((time + offset) / DAY);
+    if (!Number.isFinite(time) || !Number.isSafeInteger(row.count) || row.count < 1 || day > today) return;
+    if (!daily.has(day) || time >= daily.get(day).time) daily.set(day, { row, time });
+  });
+  if (!daily.size) return [];
+  const days = Array.from(daily.keys()).sort((a, b) => a - b);
+  const end = Math.min(today, customRange ? Math.floor((customRange.to + offset) / DAY) : today);
+  const start = Math.max(days[0], customRange ? Math.floor((customRange.from + offset) / DAY) : days[0]);
+  let previous = null;
+  for (const day of days) {
+    if (day >= start) break;
+    previous = daily.get(day);
+  }
+  const displayRows = [];
+  for (let day = start; day <= end; day++) {
+    const actual = daily.get(day);
+    if (actual) previous = actual;
+    if (!previous) continue;
+    displayRows.push(actual ? { ...actual, carried: false } : {
+      row: previous.row, time: day * DAY - offset, carried: true
+    });
+  }
   const formats = {
     day: { day: '2-digit', month: '2-digit' },
     week: { day: '2-digit', month: '2-digit' },
@@ -8,8 +35,7 @@ function buildFollowerPoints(rows, range, customRange) {
     year: { year: 'numeric' }
   };
   const grouped = new Map();
-  rows.forEach(row => {
-    const time = Date.parse(row.observedAt);
+  displayRows.forEach(({ row, time, carried }) => {
     if (!Number.isFinite(time) || (customRange && (time < customRange.from || time > customRange.to))) return;
     const local = new Date(time + 7 * 3600000);
     const day = Math.floor(local.getTime() / DAY);
@@ -21,7 +47,7 @@ function buildFollowerPoints(rows, range, customRange) {
       default: bucket = Math.floor((day + 3) / 7); // Monday starts the Bangkok week.
     }
     const old = grouped.get(bucket);
-    if (!old || time >= old.time) grouped.set(bucket, { row, time, bucket });
+    if (!old || time >= old.time) grouped.set(bucket, { row, time, bucket, carried });
   });
   const points = Array.from(grouped.values()).sort((a, b) => a.time - b.time);
   // Match the other charts: latest 8 groups, up to 40 for a custom date range.
@@ -33,7 +59,9 @@ function buildFollowerPoints(rows, range, customRange) {
   return selected.map((item, i) => ({
     value: item.row.count,
     label: new Date(item.time).toLocaleString('th-TH', { ...formats[range] || formats.week, timeZone: 'Asia/Bangkok' }),
-    tooltipLabel: new Date(item.time).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Bangkok' }),
+    tooltipLabel: item.carried
+      ? new Date(item.time).toLocaleString('th-TH', { dateStyle: 'medium', timeZone: 'Asia/Bangkok' }) + ' · ใช้ยอดวันก่อนหน้า (ไม่ได้กรอกใหม่)'
+      : new Date(item.time).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Bangkok' }),
     breakBefore: i > 0 && item.bucket - selected[i - 1].bucket > 1
   }));
 }
