@@ -937,6 +937,17 @@ const REMOTE_AREA_FEE = 50;
 let lastCalcMessage = '';
 let calcItems = []; // [{no, price, qty, status}]
 let remoteAreaChecked = false;
+let calcDiscountPercent = 0;
+
+function formatCalcMoney(value) {
+  return '฿' + Number(value).toLocaleString('th-TH', { maximumFractionDigits: 2 });
+}
+
+function setCalcDiscount(value) {
+  const percent = Number(value);
+  calcDiscountPercent = [0, 10, 15].includes(percent) ? percent : 0;
+  renderCalcTotals();
+}
 
 // Price comes from the detail text in column C, formatted like "ราคา : 130"
 function extractPriceFromDetail(text) {
@@ -947,10 +958,11 @@ function extractPriceFromDetail(text) {
   return isNaN(num) ? null : num;
 }
 
-function buildCustomerMessage(subtotal, shipping, total, remoteArea) {
+function buildCustomerMessage(subtotal, shipping, total, remoteArea, discountPercent = 0, discount = 0) {
   const fmt = n => Number(n).toLocaleString('th-TH');
   const remoteNote = remoteArea ? ` + ค่าส่งเพิ่มสำหรับพื้นที่พิเศษ ${fmt(REMOTE_AREA_FEE)} บ.` : '';
-  return `รวมสินค้า ${fmt(subtotal)} + ค่าส่งเหมาจ่าย ${fmt(SHIPPING_BASE)} บ.${remoteNote}\n= ${fmt(total)} บาทค่ะ 🌟🌈✨️`;
+  const discountNote = discountPercent ? ` - ส่วนลด ${discountPercent}% ${fmt(discount)} บ.` : '';
+  return `รวมสินค้า ${fmt(subtotal)}${discountNote} + ค่าส่งเหมาจ่าย ${fmt(SHIPPING_BASE)} บ.${remoteNote}\n= ${fmt(total)} บาทค่ะ 🌟🌈✨️`;
 }
 
 function copyCalcMessage() {
@@ -982,20 +994,32 @@ function renderCalcTotals() {
   const totalsBox = document.getElementById('calcTotalsBox');
   if (!totalsBox || !calcItems.length) return;
 
-  const subtotal = calcItems.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const subtotalCents = calcItems.reduce((sum, item) => sum + Math.round(item.price * 100) * item.qty, 0);
+  const subtotal = subtotalCents / 100;
+  const discountCents = Math.round(subtotalCents * calcDiscountPercent / 100);
+  const discount = discountCents / 100;
+  const discountedSubtotal = (subtotalCents - discountCents) / 100;
   const totalQty = calcItems.reduce((sum, item) => sum + item.qty, 0);
   const remoteFee = remoteAreaChecked ? REMOTE_AREA_FEE : 0;
   const shipping = SHIPPING_BASE + remoteFee;
-  const total = subtotal + shipping;
+  const total = (subtotalCents - discountCents + shipping * 100) / 100;
 
   const remoteFeeLine = remoteAreaChecked
     ? `<div class="calc-row"><span>ค่าส่งพื้นที่ห่างไกลหรือพื้นที่ท่องเที่ยวพิเศษ</span><span>${fmtMoney(REMOTE_AREA_FEE)}</span></div>`
     : '';
 
-  lastCalcMessage = buildCustomerMessage(subtotal, shipping, total, remoteAreaChecked);
+  lastCalcMessage = buildCustomerMessage(subtotal, shipping, total, remoteAreaChecked, calcDiscountPercent, discount);
 
   totalsBox.innerHTML = `
-    <div class="calc-row"><span>ราคาสินค้ารวม (${totalQty} ชิ้น)</span><span>${fmtMoney(subtotal)}</span></div>
+    <div class="calc-row"><span>ราคาสินค้ารวม (${totalQty} ชิ้น)</span><span>${formatCalcMoney(subtotal)}</span></div>
+    <label class="calc-row" for="calcDiscount">
+      <span>ส่วนลดสินค้า (ไม่รวมค่าส่ง)</span>
+      <select id="calcDiscount" onchange="setCalcDiscount(this.value)">
+        ${[0, 10, 15].map(percent => `<option value="${percent}" ${calcDiscountPercent === percent ? 'selected' : ''}>${percent ? percent + '%' : 'ไม่ใช้ส่วนลด'}</option>`).join('')}
+      </select>
+    </label>
+    ${calcDiscountPercent ? `<div class="calc-row"><span>ส่วนลด ${calcDiscountPercent}%</span><span>−${formatCalcMoney(discount)}</span></div>
+    <div class="calc-row"><span>ราคาสินค้าหลังส่วนลด</span><span>${formatCalcMoney(discountedSubtotal)}</span></div>` : ''}
     <div class="calc-row"><span>ค่าส่งเหมาจ่าย</span><span>${fmtMoney(SHIPPING_BASE)}</span></div>
     <label class="calc-checkbox-row">
       <input type="checkbox" ${remoteAreaChecked ? 'checked' : ''} onchange="toggleRemoteArea(this.checked)">
@@ -1003,12 +1027,13 @@ function renderCalcTotals() {
     </label>
     ${remoteFeeLine}
     <div class="calc-divider"></div>
-    <div class="calc-row calc-total"><span>รวมทั้งหมด</span><span>${fmtMoney(total)}</span></div>
+    <div class="calc-row calc-total"><span>รวมทั้งหมด</span><span>${formatCalcMoney(total)}</span></div>
   `;
   document.getElementById('calcMessageText').textContent = lastCalcMessage;
 }
 
 function doCalculate() {
+  calcDiscountPercent = 0; // A new order must explicitly opt into a discount.
   const box = document.getElementById('calcResult');
   const raw = document.getElementById('calcInput').value.trim();
   if (!raw) { box.innerHTML = ''; calcItems = []; return; }
