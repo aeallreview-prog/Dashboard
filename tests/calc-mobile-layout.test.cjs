@@ -27,4 +27,9 @@ test('mobile styles keep the image uncropped and text wrapping, with matching st
   assert.match(block(css), /flex-wrap: nowrap/);
   assert.match(block(css), /min-width: 0/);
   assert.match(css, /\.calc-item-status \{[^}]*color: var\(--muted\);[^}]*400 11px/);
+  assert.match(block(css), /\.calc-row-qty \{ display: grid; grid-template-columns: minmax\(0, 1fr\) var\(--calc-value-width\)/);
+  assert.match(block(css), /#calcTotalsBox > \.calc-row \{ display: grid; grid-template-columns: minmax\(0, 1fr\) var\(--calc-value-width\)/);
+  assert.match(block(css), /\.calc-qty-input-wrap \{[^}]*flex-wrap: nowrap/);
+  assert.doesNotMatch(block(css), /flex-direction: column|align-self: flex-end/);
+  assert.match(block(css), /#calcDiscount \{ width: 100%; text-align: right;/);
 });
