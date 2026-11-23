@@ -1088,7 +1088,7 @@ function doCalculate() {
         </span>
       </span>
       <span class="calc-qty-input-wrap">
-        จำนวน <input type="number" class="calc-qty-input" min="1" value="1" oninput="updateCalcQty(${i}, this.value)"> ชิ้น
+        <input type="number" class="calc-qty-input" aria-label="จำนวนสินค้า" min="1" value="1" oninput="updateCalcQty(${i}, this.value)">
         = <span id="calcLine${i}">${fmtMoney(item.price)}</span>
       </span>
     </div>
