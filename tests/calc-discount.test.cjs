@@ -26,6 +26,21 @@ for (const file of ['app.js', 'seek-n-tique-dashboard.html']) {
     assert.doesNotMatch(h.nodes.calcMessageText.textContent,/ส่วนลด/);
     assert.match(h.nodes.calcMessageText.textContent,/\n= 600 บาท/);
   });
+  test(`${file}: each item shows subdued full and reduced unit prices only while discount is selected`,()=>{
+    const h=setup([{price:100,qty:2},{price:99,qty:1}]);
+    assert.equal(h.nodes.calcItemDiscount0.hidden,true);
+    h.run('setCalcDiscount(10)');
+    assert.equal(h.nodes.calcItemDiscount0.hidden,false);
+    assert.equal(h.nodes.calcItemDiscount0.textContent,'ต่อชิ้น: ราคาเต็ม ฿100 → หลังลด 10% ฿90');
+    assert.equal(h.nodes.calcItemDiscount1.textContent,'ต่อชิ้น: ราคาเต็ม ฿99 → หลังลด 10% ฿89.1');
+    h.run('setCalcDiscount(15); updateCalcQty(0,3)');
+    assert.equal(h.nodes.calcItemDiscount0.textContent,'ต่อชิ้น: ราคาเต็ม ฿100 → หลังลด 15% ฿85');
+    assert.match(h.nodes.calcItemDiscount1.textContent,/฿84.15$/);
+    h.run('setCalcDiscount(0)');
+    assert.equal(h.nodes.calcItemDiscount0.hidden,true);
+    assert.equal(h.nodes.calcItemDiscount0.textContent,'');
+    assert.match(source,/class="calc-item-discount" id="calcItemDiscount/);
+  });
   test(`${file}: quantity changes recalculate discount and round to satang`,()=>{
     const h=setup([{price:99,qty:1}]);
     h.run('setCalcDiscount(15)');

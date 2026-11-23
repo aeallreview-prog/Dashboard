@@ -467,6 +467,9 @@ button:disabled { opacity: .55; cursor: wait; }
 .calc-message-text { margin: 0 0 12px; font-size: 14px; color: var(--ink); line-height: 1.6; white-space: pre-wrap; }
 .calc-row-qty { align-items: center; }
 .calc-item-label { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.calc-item-description { min-width: 0; overflow-wrap: anywhere; }
+.calc-item-discount { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; font-weight: 400; line-height: 1.5; }
+.calc-item-discount[hidden] { display: none; }
 .calc-item-thumb { width: 28px; height: 28px; object-fit: cover; border-radius: 6px; background: var(--paper); flex: none; }
 .calc-qty-input-wrap { display: flex; align-items: center; gap: 6px; color: var(--ink); font-size: 13px; }
 .calc-qty-input { width: 48px; padding: 4px 6px; border-radius: 8px; border: 1px solid var(--line); text-align: center; font: 600 13px 'DM Sans', sans-serif; }
@@ -2194,6 +2197,16 @@ function toggleRemoteArea(checked) {
 function renderCalcTotals() {
   const totalsBox = document.getElementById('calcTotalsBox');
   if (!totalsBox || !calcItems.length) return;
+  calcItems.forEach((item, index) => {
+    const note = document.getElementById(`calcItemDiscount${index}`);
+    if (!note) return;
+    note.hidden = calcDiscountPercent === 0;
+    const cents = Math.round(item.price * 100);
+    const reduced = (cents - Math.round(cents * calcDiscountPercent / 100)) / 100;
+    note.textContent = calcDiscountPercent
+      ? `ต่อชิ้น: ราคาเต็ม ${formatCalcMoney(item.price)} → หลังลด ${calcDiscountPercent}% ${formatCalcMoney(reduced)}`
+      : '';
+  });
 
   const subtotalCents = calcItems.reduce((sum, item) => sum + Math.round(item.price * 100) * item.qty, 0);
   const subtotal = subtotalCents / 100;
@@ -2272,7 +2285,9 @@ function doCalculate() {
     <div class="calc-row calc-row-qty">
       <span class="calc-item-label">
         ${item.image ? `<img class="calc-item-thumb" src="${item.image}" alt="รูปสินค้า No. ${item.no}" onerror="this.remove()">` : ''}
-        No. ${item.no}${item.status ? ` (${item.status})` : ''} ราคา ${fmtMoney(item.price)}
+        <span class="calc-item-description">No. ${item.no}${item.status ? ` (${item.status})` : ''} ราคา ${formatCalcMoney(item.price)}
+          <small class="calc-item-discount" id="calcItemDiscount${i}" hidden></small>
+        </span>
       </span>
       <span class="calc-qty-input-wrap">
         จำนวน <input type="number" class="calc-qty-input" min="1" value="1" oninput="updateCalcQty(${i}, this.value)"> ชิ้น

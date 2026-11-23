@@ -993,6 +993,16 @@ function toggleRemoteArea(checked) {
 function renderCalcTotals() {
   const totalsBox = document.getElementById('calcTotalsBox');
   if (!totalsBox || !calcItems.length) return;
+  calcItems.forEach((item, index) => {
+    const note = document.getElementById(`calcItemDiscount${index}`);
+    if (!note) return;
+    note.hidden = calcDiscountPercent === 0;
+    const cents = Math.round(item.price * 100);
+    const reduced = (cents - Math.round(cents * calcDiscountPercent / 100)) / 100;
+    note.textContent = calcDiscountPercent
+      ? `ต่อชิ้น: ราคาเต็ม ${formatCalcMoney(item.price)} → หลังลด ${calcDiscountPercent}% ${formatCalcMoney(reduced)}`
+      : '';
+  });
 
   const subtotalCents = calcItems.reduce((sum, item) => sum + Math.round(item.price * 100) * item.qty, 0);
   const subtotal = subtotalCents / 100;
@@ -1071,7 +1081,9 @@ function doCalculate() {
     <div class="calc-row calc-row-qty">
       <span class="calc-item-label">
         ${item.image ? `<img class="calc-item-thumb" src="${item.image}" alt="รูปสินค้า No. ${item.no}" onerror="this.remove()">` : ''}
-        No. ${item.no}${item.status ? ` (${item.status})` : ''} ราคา ${fmtMoney(item.price)}
+        <span class="calc-item-description">No. ${item.no}${item.status ? ` (${item.status})` : ''} ราคา ${formatCalcMoney(item.price)}
+          <small class="calc-item-discount" id="calcItemDiscount${i}" hidden></small>
+        </span>
       </span>
       <span class="calc-qty-input-wrap">
         จำนวน <input type="number" class="calc-qty-input" min="1" value="1" oninput="updateCalcQty(${i}, this.value)"> ชิ้น
