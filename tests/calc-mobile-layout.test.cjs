@@ -24,6 +24,7 @@ test('mobile styles keep the image uncropped and text wrapping, with matching st
   const block = source => source.slice(source.indexOf('@media (max-width: 640px) {\n  .calc-card'), source.indexOf('/* Templates view */'));
   assert.equal(block(css), block(read('seek-n-tique-dashboard.html')));
   assert.match(block(css), /object-fit: contain/);
+  assert.match(block(css), /width: clamp\(40px, 11vw, 56px\); height: clamp\(40px, 11vw, 56px\)/);
   assert.match(block(css), /flex-wrap: nowrap/);
   assert.match(block(css), /min-width: 0/);
   assert.match(css, /\.calc-item-status \{[^}]*color: var\(--muted\);[^}]*400 11px/);
