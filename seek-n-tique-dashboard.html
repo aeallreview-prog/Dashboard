@@ -470,9 +470,22 @@ button:disabled { opacity: .55; cursor: wait; }
 .calc-item-description { min-width: 0; overflow-wrap: anywhere; }
 .calc-item-discount { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; font-weight: 400; line-height: 1.5; }
 .calc-item-discount[hidden] { display: none; }
+.calc-item-status { display: block; margin-top: 3px; color: var(--muted); font: 400 11px/1.5 'DM Sans', sans-serif; }
 .calc-item-thumb { width: 28px; height: 28px; object-fit: cover; border-radius: 6px; background: var(--paper); flex: none; }
 .calc-qty-input-wrap { display: flex; align-items: center; gap: 6px; color: var(--ink); font-size: 13px; }
 .calc-qty-input { width: 48px; padding: 4px 6px; border-radius: 8px; border: 1px solid var(--line); text-align: center; font: 600 13px 'DM Sans', sans-serif; }
+
+@media (max-width: 640px) {
+  .calc-card { margin-inline: 12px; }
+  .calc-breakdown { padding: 14px; }
+  .calc-row-qty { flex-direction: column; align-items: stretch; gap: 8px; padding-block: 8px; }
+  .calc-row-qty .calc-item-label { flex-wrap: nowrap; align-items: flex-start; min-width: 0; gap: 12px; }
+  .calc-row-qty .calc-item-thumb { width: 56px; height: 56px; object-fit: contain; }
+  .calc-row-qty .calc-item-description { flex: 1; min-width: 0; font: 400 13px/1.5 'DM Sans', sans-serif; }
+  .calc-row-qty .calc-item-heading { color: var(--ink); font: 600 13px/1.5 'DM Sans', sans-serif; }
+  .calc-row-qty .calc-qty-input-wrap { align-self: flex-end; flex-wrap: wrap; max-width: 100%; }
+  .calc-row-qty .calc-qty-input { min-height: 44px; }
+}
 
 /* Templates view */
 .template-item { margin: 0 24px 12px; padding: 16px 18px; background: var(--paper); border-radius: 14px; display: flex; justify-content: space-between; align-items: center; gap: 14px; }
@@ -2215,7 +2228,6 @@ function renderCalcTotals() {
   const discountCents = Math.round(subtotalCents * calcDiscountPercent / 100);
   const discount = discountCents / 100;
   const discountedSubtotal = (subtotalCents - discountCents) / 100;
-  const totalQty = calcItems.reduce((sum, item) => sum + item.qty, 0);
   const remoteFee = remoteAreaChecked ? REMOTE_AREA_FEE : 0;
   const shipping = SHIPPING_BASE + remoteFee;
   const total = (subtotalCents - discountCents + shipping * 100) / 100;
@@ -2227,9 +2239,9 @@ function renderCalcTotals() {
   lastCalcMessage = buildCustomerMessage(subtotal, shipping, total, remoteAreaChecked, calcDiscountPercent, discount);
 
   totalsBox.innerHTML = `
-    <div class="calc-row"><span>ราคาสินค้ารวม (${totalQty} ชิ้น)</span><span>${formatCalcMoney(subtotal)}</span></div>
+    <div class="calc-row"><span>ราคาสินค้ารวม</span><span>${formatCalcMoney(subtotal)}</span></div>
     <label class="calc-row" for="calcDiscount">
-      <span>ส่วนลดสินค้า (ไม่รวมค่าส่ง)</span>
+      <span>ส่วนลดสินค้า</span>
       <select id="calcDiscount" onchange="setCalcDiscount(this.value)">
         ${[0, 10, 15].map(percent => `<option value="${percent}" ${calcDiscountPercent === percent ? 'selected' : ''}>${percent ? percent + '%' : 'ไม่ใช้ส่วนลด'}</option>`).join('')}
       </select>
@@ -2287,7 +2299,8 @@ function doCalculate() {
     <div class="calc-row calc-row-qty">
       <span class="calc-item-label">
         ${item.image ? `<img class="calc-item-thumb" src="${item.image}" alt="รูปสินค้า No. ${item.no}" onerror="this.remove()">` : ''}
-        <span class="calc-item-description">No. ${item.no}${item.status ? ` (${item.status})` : ''}<span id="calcItemFullPrice${i}"> ราคา ${formatCalcMoney(item.price)}</span>
+        <span class="calc-item-description"><span class="calc-item-heading">No. ${item.no}<span id="calcItemFullPrice${i}"> ราคา ${formatCalcMoney(item.price)}</span></span>
+          ${item.status ? `<small class="calc-item-status">${escapeHtml(item.status)}</small>` : ''}
           <small class="calc-item-discount" id="calcItemDiscount${i}" hidden></small>
         </span>
       </span>

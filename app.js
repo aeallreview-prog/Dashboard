@@ -1011,7 +1011,6 @@ function renderCalcTotals() {
   const discountCents = Math.round(subtotalCents * calcDiscountPercent / 100);
   const discount = discountCents / 100;
   const discountedSubtotal = (subtotalCents - discountCents) / 100;
-  const totalQty = calcItems.reduce((sum, item) => sum + item.qty, 0);
   const remoteFee = remoteAreaChecked ? REMOTE_AREA_FEE : 0;
   const shipping = SHIPPING_BASE + remoteFee;
   const total = (subtotalCents - discountCents + shipping * 100) / 100;
@@ -1023,9 +1022,9 @@ function renderCalcTotals() {
   lastCalcMessage = buildCustomerMessage(subtotal, shipping, total, remoteAreaChecked, calcDiscountPercent, discount);
 
   totalsBox.innerHTML = `
-    <div class="calc-row"><span>ราคาสินค้ารวม (${totalQty} ชิ้น)</span><span>${formatCalcMoney(subtotal)}</span></div>
+    <div class="calc-row"><span>ราคาสินค้ารวม</span><span>${formatCalcMoney(subtotal)}</span></div>
     <label class="calc-row" for="calcDiscount">
-      <span>ส่วนลดสินค้า (ไม่รวมค่าส่ง)</span>
+      <span>ส่วนลดสินค้า</span>
       <select id="calcDiscount" onchange="setCalcDiscount(this.value)">
         ${[0, 10, 15].map(percent => `<option value="${percent}" ${calcDiscountPercent === percent ? 'selected' : ''}>${percent ? percent + '%' : 'ไม่ใช้ส่วนลด'}</option>`).join('')}
       </select>
@@ -1083,7 +1082,8 @@ function doCalculate() {
     <div class="calc-row calc-row-qty">
       <span class="calc-item-label">
         ${item.image ? `<img class="calc-item-thumb" src="${item.image}" alt="รูปสินค้า No. ${item.no}" onerror="this.remove()">` : ''}
-        <span class="calc-item-description">No. ${item.no}${item.status ? ` (${item.status})` : ''}<span id="calcItemFullPrice${i}"> ราคา ${formatCalcMoney(item.price)}</span>
+        <span class="calc-item-description"><span class="calc-item-heading">No. ${item.no}<span id="calcItemFullPrice${i}"> ราคา ${formatCalcMoney(item.price)}</span></span>
+          ${item.status ? `<small class="calc-item-status">${escapeHtml(item.status)}</small>` : ''}
           <small class="calc-item-discount" id="calcItemDiscount${i}" hidden></small>
         </span>
       </span>
